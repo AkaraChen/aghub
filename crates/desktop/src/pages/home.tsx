@@ -1,4 +1,4 @@
-import { PlusIcon } from "@heroicons/react/24/solid";
+import { Cog6ToothIcon } from "@heroicons/react/24/solid";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -206,12 +206,14 @@ export default function HomePage() {
 						type="button"
 						onClick={() => setLocation("/settings?tab=agents")}
 						className={cn(
-							"group/add row-span-1 flex h-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border p-4 text-center transition-colors dark:border-foreground/15",
+							"group/manage row-span-1 flex h-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border p-4 text-center transition-colors dark:border-foreground/15",
 							"hover:border-accent hover:bg-accent/10 focus-visible:border-accent focus-visible:bg-accent/10 focus-visible:outline-none",
 						)}
 					>
-						<PlusIcon className="size-5 text-muted transition-colors group-hover/add:text-accent group-focus-visible/add:text-accent" />
-						<p className="text-sm font-medium">{t("addAgent")}</p>
+						<Cog6ToothIcon className="size-5 text-muted transition-colors group-hover/manage:text-accent group-focus-visible/manage:text-accent" />
+						<p className="text-sm font-medium">
+							{t("manageAgentHarnesses")}
+						</p>
 					</button>
 				</section>
 			</div>
