@@ -169,9 +169,10 @@ The [Registry API contract](https://github.com/modelcontextprotocol/registry/blo
 defines cursor handling; publication dates come from the Registry envelope,
 not package release dates or a local refresh timestamp.
 
-Browser acceptance includes installed-first source order, full text containment
-at 1280 and 960 pixels in both themes, missing-date labels, unsupported listings,
-next-page failure/retry, and cursor reset on a changed query or source.
+Browser acceptance includes preserved source order when an entry is installed,
+full text containment at 1280 and 960 pixels in both themes, missing-date labels,
+unsupported listings, next-page failure/retry, and cursor reset on a changed
+query or source.
 
 ### Other catalog sources evaluated on 2026-08-31
 
