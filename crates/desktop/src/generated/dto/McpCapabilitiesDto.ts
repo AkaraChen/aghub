@@ -5,5 +5,7 @@ export type McpCapabilitiesDto = {
 	scopes: ScopeSupportDto;
 	stdio: boolean;
 	remote: boolean;
+	sse: boolean;
+	streamable_http: boolean;
 	enable_disable: boolean;
 };

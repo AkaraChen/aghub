@@ -48,6 +48,7 @@ import type {
 	InstallSkillRequest,
 	InstallSkillResponse,
 	CCPluginMarketResponse,
+	MarketMcpPage,
 	MarketSkill,
 	McpResponse,
 	OperationBatchResponse,
@@ -793,6 +794,26 @@ export function createApi(baseUrl: string, token: string) {
 				if (limit) searchParams.limit = String(limit);
 				return client
 					.get("skills-market/search", { searchParams })
+					.json();
+			},
+		},
+		mcpMarket: {
+			search(
+				q: string,
+				limit?: number,
+				registryUrl?: string,
+				cursor?: string,
+			): Promise<MarketMcpPage> {
+				const searchParams: Record<string, string> = {};
+				if (q) searchParams.q = q;
+				if (limit) searchParams.limit = String(limit);
+				if (registryUrl) searchParams.registry_url = registryUrl;
+				if (cursor) searchParams.cursor = cursor;
+				return client
+					.get("mcp-market/search", {
+						searchParams,
+						timeout: 30_000,
+					})
 					.json();
 			},
 		},

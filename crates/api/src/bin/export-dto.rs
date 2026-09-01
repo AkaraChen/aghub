@@ -35,6 +35,11 @@ use aghub_api::dto::{
 	},
 	market::MarketSkill,
 	mcp::{CreateMcpRequest, McpResponse, TransportDto, UpdateMcpRequest},
+	mcp_market::{
+		MarketMcpArgument, MarketMcpInput, MarketMcpInstallMethod,
+		MarketMcpKeyValue, MarketMcpPage, MarketMcpServer, MarketMcpTransport,
+		MarketMcpValue,
+	},
 	plugin::{
 		CCMarketplaceAddRequest, CCMarketplaceEntryResponse,
 		CCMarketplaceListResponse, CCMarketplaceMutationResponse,
@@ -207,6 +212,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<OpenSkillFolderRequest>(&cfg)?;
 	export_type::<EditSkillFolderRequest>(&cfg)?;
 	export_type::<MarketSkill>(&cfg)?;
+	export_type::<MarketMcpArgument>(&cfg)?;
+	export_type::<MarketMcpInput>(&cfg)?;
+	export_type::<MarketMcpInstallMethod>(&cfg)?;
+	export_type::<MarketMcpKeyValue>(&cfg)?;
+	export_type::<MarketMcpValue>(&cfg)?;
+	export_type::<MarketMcpTransport>(&cfg)?;
+	export_type::<MarketMcpServer>(&cfg)?;
+	export_type::<MarketMcpPage>(&cfg)?;
 	export_type::<TransportDto>(&cfg)?;
 	export_type::<CreateMcpRequest>(&cfg)?;
 	export_type::<UpdateMcpRequest>(&cfg)?;

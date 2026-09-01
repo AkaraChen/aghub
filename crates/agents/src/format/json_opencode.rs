@@ -7,12 +7,8 @@ use std::collections::HashMap;
 
 #[derive(Debug, Default, Deserialize)]
 struct OpenCodeConfig {
-	#[serde(rename = "$schema", default)]
-	schema: Option<String>,
 	#[serde(default)]
 	mcp: HashMap<String, OpenCodeMcpEntry>,
-	#[serde(flatten)]
-	extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,32 +42,40 @@ struct OpenCodeMcpOutput {
 	timeout: Option<u64>,
 }
 
-#[derive(Debug, Default, Serialize)]
-struct OpenCodeConfigOutput {
-	#[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
-	schema: Option<String>,
-	mcp: HashMap<String, OpenCodeMcpOutput>,
-	#[serde(flatten)]
-	extra: serde_json::Map<String, serde_json::Value>,
-}
-
 pub fn parse(content: &str) -> Result<AgentConfig> {
-	let oc: OpenCodeConfig = serde_json::from_str(content)?;
+	let oc: OpenCodeConfig = aghub_json::parse_jsonc_opt(content)
+		.map_err(|error| ConfigError::InvalidConfig(error.to_string()))?
+		.unwrap_or_default();
 	let mut config = AgentConfig::new();
 
 	for (name, entry) in oc.mcp {
+		if entry
+			.server_type
+			.as_deref()
+			.is_some_and(|kind| !matches!(kind, "local" | "remote"))
+		{
+			continue;
+		}
 		let is_remote = entry.server_type.as_deref() == Some("remote")
 			|| (entry.server_type.is_none() && entry.url.is_some());
 		let transport = if is_remote {
 			McpTransport::StreamableHttp {
-				url: entry.url.unwrap_or_default(),
+				url: entry.url.ok_or_else(|| {
+					ConfigError::InvalidConfig(format!(
+						"MCP '{name}' requires url"
+					))
+				})?,
 				headers: entry.headers,
 				timeout: entry.timeout,
 			}
 		} else {
-			let cmd = entry.command.unwrap_or_default();
+			let Some(cmd) = entry.command else {
+				continue;
+			};
 			let (command, args) = if cmd.is_empty() {
-				(String::new(), vec![])
+				return Err(ConfigError::InvalidConfig(format!(
+					"MCP '{name}' requires a nonempty command"
+				)));
 			} else {
 				(cmd[0].clone(), cmd[1..].to_vec())
 			};
@@ -83,6 +87,7 @@ pub fn parse(content: &str) -> Result<AgentConfig> {
 			}
 		};
 		config.mcps.push(McpServer {
+			source_name: Some(name.clone()),
 			name,
 			enabled: entry.enabled,
 			transport,
@@ -98,18 +103,36 @@ pub fn serialize(
 	config: &AgentConfig,
 	original_content: Option<&str>,
 ) -> Result<String> {
-	let original: OpenCodeConfig = original_content
-		.filter(|c| !c.trim().is_empty())
-		.and_then(|c| serde_json::from_str(c).ok())
+	let previous = parse(original_content.unwrap_or(""))?;
+	let mut root: serde_json::Map<String, serde_json::Value> =
+		aghub_json::parse_jsonc_opt(original_content.unwrap_or(""))
+			.map_err(|error| ConfigError::InvalidConfig(error.to_string()))?
+			.unwrap_or_default();
+	let originals = root
+		.get("mcp")
+		.and_then(|value| value.as_object())
+		.cloned()
 		.unwrap_or_default();
-
-	let mut out = OpenCodeConfigOutput {
-		schema: original.schema,
-		mcp: HashMap::new(),
-		extra: original.extra,
-	};
+	let mut servers = originals.clone();
+	for old in &previous.mcps {
+		if !config.mcps.iter().any(|mcp| mcp.name == old.name) {
+			servers.remove(&old.name);
+		}
+	}
 
 	for mcp in &config.mcps {
+		let source_name = mcp.source_name.as_deref().unwrap_or(&mcp.name);
+		let old = previous.mcps.iter().find(|old| old.name == source_name);
+		if originals.contains_key(&mcp.name)
+			&& (source_name != mcp.name || old.is_none())
+		{
+			return Err(ConfigError::resource_exists("MCP server", &mcp.name));
+		}
+		let mut native = originals
+			.get(source_name)
+			.and_then(|value| value.as_object())
+			.cloned()
+			.unwrap_or_default();
 		let entry = match &mcp.transport {
 			McpTransport::Stdio {
 				command,
@@ -151,15 +174,57 @@ pub fn serialize(
 				timeout: *timeout,
 			},
 		};
-		out.mcp.insert(mcp.name.clone(), entry);
+		if old.map(|server| &server.transport) != Some(&mcp.transport) {
+			for key in [
+				"type",
+				"command",
+				"url",
+				"environment",
+				"env",
+				"headers",
+				"timeout",
+			] {
+				native.remove(key);
+			}
+			let fields: serde_json::Value = serde_json::to_value(entry)?;
+			if let serde_json::Value::Object(fields) = fields {
+				native.extend(fields);
+			}
+		}
+		if old.map(|server| server.enabled) != Some(mcp.enabled) {
+			native
+				.insert("enabled".into(), serde_json::Value::Bool(mcp.enabled));
+		}
+		servers.insert(mcp.name.clone(), serde_json::Value::Object(native));
 	}
-
-	serde_json::to_string_pretty(&out).map_err(ConfigError::Json)
+	root.insert("mcp".into(), serde_json::Value::Object(servers));
+	aghub_json::patch_jsonc_object(original_content, &root)
+		.map_err(|error| ConfigError::InvalidConfig(error.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn editing_retains_oauth_native_options_and_comments() {
+		let original = r#"{
+			// Native client authorization, not an aghub credential
+			"mcp": {"remote": {"type": "remote", "url": "https://example.test/mcp", "oauth": {"clientId": "public-client", "scopes": ["read"]}, "custom": {"mode": "user"}}}
+		}"#;
+		let mut config = parse(original).unwrap();
+		config.mcps[0].enabled = false;
+		let output = serialize(&config, Some(original)).unwrap();
+		let after: serde_json::Value =
+			aghub_json::parse_jsonc_opt(&output).unwrap().unwrap();
+		assert_eq!(
+			after["mcp"]["remote"]["oauth"]["clientId"],
+			"public-client"
+		);
+		assert_eq!(after["mcp"]["remote"]["enabled"], false);
+		assert_eq!(after["mcp"]["remote"]["custom"]["mode"], "user");
+		assert!(output.contains("// Native client authorization"));
+	}
 
 	#[test]
 	fn test_opencode_native_roundtrip() {

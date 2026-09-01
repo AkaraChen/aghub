@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AgentInfo } from "../generated/dto";
-import { supportsIndividualSkillTarget } from "./agent-capabilities";
+import {
+	supportsIndividualSkillTarget,
+	supportsMcpTransport,
+} from "./agent-capabilities";
 
 function agentWithWritePaths(
 	globalWrite: string | null,
@@ -21,6 +24,8 @@ function agentWithWritePaths(
 				scopes: { global: false, project: false },
 				stdio: false,
 				remote: false,
+				sse: false,
+				streamable_http: false,
 				enable_disable: false,
 			},
 			sub_agents: { scopes: { global: false, project: false } },
@@ -69,4 +74,26 @@ describe("supportsIndividualSkillTarget", () => {
 		expect(supportsIndividualSkillTarget(agent, "global")).toBe(false);
 		expect(supportsIndividualSkillTarget(agent, "project")).toBe(false);
 	});
+});
+
+it("does not treat Streamable HTTP support as legacy SSE support", () => {
+	const agent = agentWithWritePaths(null, null);
+	agent.capabilities.mcp.remote = true;
+	agent.capabilities.mcp.streamable_http = true;
+	expect(
+		supportsMcpTransport(agent, {
+			type: "streamable_http",
+			url: "https://example.test/mcp",
+			headers: null,
+			timeout: null,
+		}),
+	).toBe(true);
+	expect(
+		supportsMcpTransport(agent, {
+			type: "sse",
+			url: "https://example.test/sse",
+			headers: null,
+			timeout: null,
+		}),
+	).toBe(false);
 });

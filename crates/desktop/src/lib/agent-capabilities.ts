@@ -23,7 +23,7 @@ export function supportsMcpTransport(
 ): boolean {
 	if (!transport) return false;
 	if (transport.type === "stdio") return agent.capabilities.mcp.stdio;
-	return agent.capabilities.mcp.remote;
+	return agent.capabilities.mcp[transport.type];
 }
 
 export function supportsSkill(agent: Pick<AgentInfo, "capabilities">): boolean {

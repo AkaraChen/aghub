@@ -4,6 +4,7 @@ pub mod credentials;
 pub mod inference;
 pub mod integrations;
 pub mod market;
+pub mod mcp_market;
 pub mod mcps;
 pub mod plugins;
 pub mod prompts;

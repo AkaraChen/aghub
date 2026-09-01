@@ -4,7 +4,7 @@ use crate::descriptor::*;
 
 define_mcp_paths! {
 	global: ".config/amp/settings.json",
-	project: ".amp/mcp.json",
+	project: ".amp/settings.json",
 	data_dir: ".config/amp",
 	strategy: mcp_strategy::parse_json_map_nested_amp_mcp_servers,
 			  mcp_strategy::serialize_json_map_nested_amp_mcp_servers,
@@ -52,7 +52,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				project: true,
 			},
 			stdio: true,
-			remote: true,
+			sse: true,
+			streamable_http: true,
 			enable_disable: false,
 		},
 		sub_agents: SubAgentCapabilities {

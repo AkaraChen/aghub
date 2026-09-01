@@ -87,7 +87,8 @@ static ADAPTER_TEST_DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				project: true,
 			},
 			stdio: true,
-			remote: true,
+			sse: true,
+			streamable_http: true,
 			enable_disable: false,
 		},
 		sub_agents: SubAgentCapabilities {
@@ -431,6 +432,7 @@ fn test_opencode_stdio_env_becomes_environment() {
 	env.insert("MY_ENV_VAR".to_string(), "my_value".to_string());
 	let mcp = McpServer {
 		name: "env-server".to_string(),
+		source_name: None,
 		enabled: true,
 		transport: McpTransport::Stdio {
 			command: "bun".to_string(),
@@ -469,6 +471,7 @@ fn test_opencode_timeout_preserved() {
 
 	let local_with_timeout = McpServer {
 		name: "local-with-timeout".to_string(),
+		source_name: None,
 		enabled: true,
 		transport: McpTransport::Stdio {
 			command: "bun".to_string(),
@@ -481,6 +484,7 @@ fn test_opencode_timeout_preserved() {
 	};
 	let remote_with_timeout = McpServer {
 		name: "remote-with-timeout".to_string(),
+		source_name: None,
 		enabled: true,
 		transport: McpTransport::StreamableHttp {
 			url: "https://remote.example.com".to_string(),
@@ -1094,6 +1098,7 @@ fn test_codex_mcp_toml_stdio_with_env() {
 	env.insert("API_KEY".to_string(), "abc123".to_string());
 	let mcp = McpServer {
 		name: "repo".to_string(),
+		source_name: None,
 		enabled: true,
 		transport: McpTransport::Stdio {
 			command: "node".to_string(),
@@ -1111,25 +1116,77 @@ fn test_codex_mcp_toml_stdio_with_env() {
 	assert!(content.contains("abc123"));
 }
 
-/// Codex: StreamableHttp (remote) MCP is silently dropped in TOML format
-/// (TOML format only supports stdio transports)
-/// Corresponds to ruler test: apply-mcp.toml-remote behavior — remote servers require
-/// agent support. Codex only supports stdio (mcp_remote: false in descriptor).
 #[test]
-fn test_codex_mcp_toml_remote_not_supported() {
+fn test_codex_http_roundtrip_and_sse_rejection() {
 	let test = TestConfig::new(AgentType::Codex).unwrap();
 	let mut manager = test.create_manager();
 	manager.load().unwrap();
 
-	// Codex descriptor has mcp_remote: false, but the manager still accepts
-	// the add_mcp call — it just won't serialize the remote transport to TOML
 	manager.add_mcp(mcp_stdio("stdio-server")).unwrap();
+	manager.add_mcp(mcp_http("remote-server")).unwrap();
+	manager.disable_mcp("remote-server").unwrap();
+	manager.load().unwrap();
+	assert!(!manager.get_mcp("remote-server").unwrap().enabled);
+	assert!(matches!(
+		manager.get_mcp("remote-server").unwrap().transport,
+		McpTransport::StreamableHttp { .. }
+	));
 
 	let content = test.read_config().unwrap();
 	assert!(content.contains("[mcp_servers.stdio-server]"));
+	assert!(content.contains("[mcp_servers.remote-server]"));
+	assert!(manager.add_mcp(mcp_sse("legacy")).is_err());
+	assert!(manager
+		.update_mcp("remote-server", mcp_sse("remote-server"))
+		.is_err());
+	assert_eq!(content, test.read_config().unwrap());
+}
 
-	// Remote transport silently dropped by TOML serializer
-	// SSE/HTTP not supported in TOML format per toml_format.rs
+#[test]
+fn rejected_mcp_rename_keeps_the_loaded_entry() {
+	let test = TestConfigBuilder::new(AgentType::Claude)
+		.with_content(r#"{"mcpServers":{"local":{"command":"node"},"socket":{"type":"ws","url":"ws://localhost:3000"}}}"#)
+		.build().unwrap();
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	let original = test.read_config().unwrap();
+	let mut renamed = manager.get_mcp("local").unwrap().clone();
+	renamed.name = "socket".into();
+	assert!(manager.update_mcp("local", renamed).is_err());
+	assert_eq!(test.read_config().unwrap(), original);
+	assert!(manager.get_mcp("local").is_some());
+	assert!(manager.get_mcp("socket").is_none());
+}
+
+#[test]
+fn mcp_rename_keeps_native_options_across_repeated_edits() {
+	let test = TestConfigBuilder::new(AgentType::Claude)
+		.with_content(r#"{"mcpServers":{"before":{"type":"http","url":"https://example.test/mcp","oauth":{"clientId":"public-client"},"custom":42},"occupied":{"command":"node"}}}"#)
+		.build().unwrap();
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	let mut renamed = manager.get_mcp("before").unwrap().clone();
+	renamed.name = "after".into();
+	manager.update_mcp("before", renamed).unwrap();
+	let mut edited = manager.get_mcp("after").unwrap().clone();
+	edited.transport =
+		McpTransport::streamable_http("https://example.test/updated");
+	manager.update_mcp("after", edited.clone()).unwrap();
+	let output = test.read_config().unwrap();
+	let after: serde_json::Value = serde_json::from_str(&output).unwrap();
+	assert_eq!(
+		after["mcpServers"]["after"]["oauth"]["clientId"],
+		"public-client"
+	);
+	assert_eq!(after["mcpServers"]["after"]["custom"], 42);
+	assert_eq!(
+		after["mcpServers"]["after"]["url"],
+		"https://example.test/updated"
+	);
+	assert!(after["mcpServers"].get("before").is_none());
+	edited.name = "occupied".into();
+	assert!(manager.update_mcp("after", edited).is_err());
+	assert_eq!(output, test.read_config().unwrap());
 }
 
 /// Codex: pre-existing TOML keys (model, etc.) are preserved after MCP update

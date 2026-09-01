@@ -14,6 +14,13 @@ export interface Project {
 	path: string;
 }
 
+/** A user-added MCP registry source (must implement the official registry API). */
+export interface McpRegistrySource {
+	id: string;
+	name: string;
+	url: string;
+}
+
 export interface IntegrationPreferences {
 	codeEditor?: CodeEditorType;
 }

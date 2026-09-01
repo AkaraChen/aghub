@@ -262,6 +262,7 @@ fn test_config_round_trip_preserves_enabled_state() {
 	// Add resources with mixed enabled states
 	let enabled_mcp = McpServer {
 		name: "enabled-mcp".to_string(),
+		source_name: None,
 		enabled: true,
 		transport: McpTransport::stdio("echo", vec!["test".to_string()]),
 		timeout: None,
@@ -269,6 +270,7 @@ fn test_config_round_trip_preserves_enabled_state() {
 	};
 	let disabled_mcp = McpServer {
 		name: "disabled-mcp".to_string(),
+		source_name: None,
 		enabled: false,
 		transport: McpTransport::stdio("echo", vec!["test".to_string()]),
 		timeout: None,
@@ -418,6 +420,7 @@ fn test_mcp_with_env_vars() {
 
 	let mcp = McpServer {
 		name: "env-mcp".to_string(),
+		source_name: None,
 		enabled: true,
 		transport: McpTransport::Stdio {
 			command: "my-server".to_string(),

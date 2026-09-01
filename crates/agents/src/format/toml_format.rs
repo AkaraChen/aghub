@@ -2,170 +2,227 @@ use crate::{
 	errors::{ConfigError, Result},
 	models::{AgentConfig, McpServer, McpTransport},
 };
+use serde::Deserialize;
 use std::collections::HashMap;
+use toml_edit::{value, Array, DocumentMut, Item, Table};
+
+#[derive(Deserialize)]
+struct TomlMcpEntry {
+	command: Option<String>,
+	url: Option<String>,
+	#[serde(default)]
+	args: Vec<String>,
+	env: Option<HashMap<String, String>>,
+	http_headers: Option<HashMap<String, String>>,
+	#[serde(default = "crate::models::default_true")]
+	enabled: bool,
+}
 
 fn parse_toml(content: &str) -> Result<toml::Value> {
-	toml::from_str(content).map_err(|e| {
-		ConfigError::InvalidConfig(format!("Failed to parse TOML: {e}"))
+	toml::from_str(content).map_err(|error| {
+		ConfigError::InvalidConfig(format!("Failed to parse TOML: {error}"))
 	})
 }
 
 pub fn parse(content: &str) -> Result<AgentConfig> {
 	let doc = parse_toml(content)?;
 	let mut config = AgentConfig::new();
-
-	let Some(servers) = doc.get("mcp_servers").and_then(|v| v.as_table())
-	else {
+	let Some(value) = doc.get("mcp_servers") else {
 		return Ok(config);
 	};
-
+	let servers = value.as_table().ok_or_else(|| {
+		ConfigError::InvalidConfig("mcp_servers must be a table".into())
+	})?;
 	for (name, entry) in servers {
-		let table = match entry.as_table() {
-			Some(t) => t,
-			None => continue,
-		};
-		let Some(command) = table.get("command").and_then(|v| v.as_str())
-		else {
+		if entry.get("command").is_none() && entry.get("url").is_none() {
 			continue;
-		};
-		let args = table
-			.get("args")
-			.and_then(|v| v.as_array())
-			.map(|arr| {
-				arr.iter()
-					.filter_map(|v| v.as_str().map(String::from))
-					.collect()
-			})
-			.unwrap_or_default();
-		let env = table
-			.get("env")
-			.and_then(|v| v.as_table())
-			.map(|t| {
-				t.iter()
-					.filter_map(|(k, v)| {
-						v.as_str().map(|s| (k.clone(), s.to_string()))
-					})
-					.collect::<HashMap<_, _>>()
-			})
-			.filter(|m| !m.is_empty());
-
-		config.mcps.push(McpServer {
-			name: name.clone(),
-			enabled: true,
-			transport: McpTransport::Stdio {
-				command: command.to_string(),
-				args,
-				env,
+		}
+		let mcp: TomlMcpEntry = entry.clone().try_into().map_err(|error| {
+			ConfigError::InvalidConfig(format!("MCP '{name}': {error}"))
+		})?;
+		let transport = match (mcp.command, mcp.url) {
+			(Some(command), None) => McpTransport::Stdio {
+				command,
+				args: mcp.args,
+				env: mcp.env,
 				timeout: None,
 			},
-			timeout: None,
-			config_source: None,
-		});
+			(None, Some(url)) => McpTransport::StreamableHttp {
+				url,
+				headers: mcp.http_headers,
+				timeout: None,
+			},
+			_ => {
+				return Err(ConfigError::InvalidConfig(format!(
+					"MCP '{name}' requires exactly one of command or url"
+				)))
+			}
+		};
+		let mut server = McpServer::new(name, transport);
+		server.enabled = mcp.enabled;
+		server.source_name = Some(name.clone());
+		config.mcps.push(server);
 	}
-
 	Ok(config)
 }
 
 pub fn serialize(
 	config: &AgentConfig,
-	original_content: Option<&str>,
+	original: Option<&str>,
 ) -> Result<String> {
-	let mut doc = match original_content {
-		Some(c) if !c.trim().is_empty() => parse_toml(c)?,
-		_ => toml::Value::Table(toml::map::Map::new()),
-	};
-
-	let root = doc.as_table_mut().ok_or_else(|| {
-		ConfigError::InvalidConfig("root is not a table".into())
+	let content = original.unwrap_or("");
+	let previous = parse(content)?;
+	let mut doc = content.parse::<DocumentMut>().map_err(|error| {
+		ConfigError::InvalidConfig(format!("Failed to parse TOML: {error}"))
 	})?;
-
-	// Get or create the mcp_servers table.
-	if !root.contains_key("mcp_servers") {
-		root.insert(
-			"mcp_servers".to_string(),
-			toml::Value::Table(toml::map::Map::new()),
-		);
+	if !doc.contains_key("mcp_servers") {
+		doc.insert("mcp_servers", Item::Table(Table::new()));
 	}
-	let servers = root
-		.get_mut("mcp_servers")
-		.and_then(|v| v.as_table_mut())
-		.ok_or_else(|| {
-			ConfigError::InvalidConfig("mcp_servers is not a table".into())
-		})?;
-
-	// Collect the names aghub manages this round.
-	let managed: std::collections::HashSet<String> =
-		config.mcps.iter().map(|m| m.name.clone()).collect();
-
-	// Remove servers that aghub no longer tracks.
-	servers.retain(|name, _| managed.contains(name));
-
-	// Upsert each server: merge aghub fields into existing entry.
+	let servers = doc["mcp_servers"].as_table_like_mut().ok_or_else(|| {
+		ConfigError::InvalidConfig("mcp_servers must be a table".into())
+	})?;
+	let originals: HashMap<_, _> = servers
+		.iter()
+		.map(|(name, entry)| (name.to_string(), entry.clone()))
+		.collect();
+	for old in &previous.mcps {
+		if !config.mcps.iter().any(|mcp| mcp.name == old.name) {
+			servers.remove(&old.name);
+		}
+	}
 	for mcp in &config.mcps {
-		if !mcp.enabled {
-			servers.remove(&mcp.name);
-			continue;
+		let source_name = mcp.source_name.as_deref().unwrap_or(&mcp.name);
+		let old = previous.mcps.iter().find(|old| old.name == source_name);
+		if originals.contains_key(&mcp.name)
+			&& (source_name != mcp.name || old.is_none())
+		{
+			return Err(ConfigError::resource_exists("MCP server", &mcp.name));
 		}
-		let McpTransport::Stdio {
-			command, args, env, ..
-		} = &mcp.transport
-		else {
-			continue;
-		};
-
-		let entry = servers
-			.entry(&mcp.name)
-			.or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
-		let table = match entry.as_table_mut() {
-			Some(t) => t,
-			None => continue,
-		};
-
-		table.insert(
-			"command".to_string(),
-			toml::Value::String(command.clone()),
-		);
-
-		if args.is_empty() {
-			table.remove("args");
-		} else {
-			table.insert(
-				"args".to_string(),
-				toml::Value::Array(
-					args.iter()
-						.map(|a| toml::Value::String(a.clone()))
-						.collect(),
-				),
-			);
-		}
-
-		match env {
-			Some(env_map) if !env_map.is_empty() => {
-				let mut env_table = toml::map::Map::new();
-				for (k, v) in env_map {
-					env_table.insert(k.clone(), toml::Value::String(v.clone()));
+		let mut item = originals
+			.get(source_name)
+			.cloned()
+			.unwrap_or_else(|| Item::Table(Table::new()));
+		let entry = item.as_table_like_mut().ok_or_else(|| {
+			ConfigError::InvalidConfig(format!(
+				"MCP '{}' must be a table",
+				mcp.name
+			))
+		})?;
+		if old.map(|server| &server.transport) != Some(&mcp.transport) {
+			match &mcp.transport {
+				McpTransport::Stdio {
+					command, args, env, ..
+				} => {
+					for key in ["url", "http_headers"] {
+						entry.remove(key);
+					}
+					entry.insert("command", value(command));
+					if args.is_empty() {
+						entry.remove("args");
+					} else {
+						let args: Array =
+							args.iter().map(String::as_str).collect();
+						entry.insert("args", value(args));
+					}
+					if let Some(env) = env {
+						let mut table = Table::new();
+						for (key, val) in env {
+							table.insert(key, value(val));
+						}
+						entry.insert("env", Item::Table(table));
+					} else {
+						entry.remove("env");
+					}
 				}
-				table.insert("env".to_string(), toml::Value::Table(env_table));
-			}
-			_ => {
-				table.remove("env");
+				McpTransport::StreamableHttp { url, headers, .. } => {
+					for key in ["command", "args", "env"] {
+						entry.remove(key);
+					}
+					entry.insert("url", value(url));
+					if let Some(headers) = headers {
+						let mut table = Table::new();
+						for (key, val) in headers {
+							table.insert(key, value(val));
+						}
+						entry.insert("http_headers", Item::Table(table));
+					} else {
+						entry.remove("http_headers");
+					}
+				}
+				McpTransport::Sse { .. } => {
+					return Err(ConfigError::UnsupportedOperation(
+						"TOML MCP configuration does not support legacy SSE"
+							.into(),
+					))
+				}
 			}
 		}
+		if (entry.contains_key("enabled") || !mcp.enabled)
+			&& old.map(|server| server.enabled) != Some(mcp.enabled)
+		{
+			entry.insert("enabled", value(mcp.enabled));
+		}
+		servers.insert(&mcp.name, item);
 	}
-
-	// Remove empty mcp_servers table.
 	if servers.is_empty() {
-		root.remove("mcp_servers");
+		doc.remove("mcp_servers");
 	}
-
-	toml::to_string_pretty(&doc)
-		.map_err(|e| ConfigError::InvalidConfig(e.to_string()))
+	Ok(doc.to_string())
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::models::{McpServer, McpTransport};
+
+	#[test]
+	fn codex_http_edit_retains_auth_and_tool_policy() {
+		let original = r#"
+# user's model choice
+model = "gpt-5.4"
+[mcp_servers.github]
+url = "https://example.test/mcp"
+enabled = false
+bearer_token_env_var = "GITHUB_TOKEN"
+env_http_headers = { "X-Tenant" = "TENANT" }
+http_headers = { "X-Version" = "1" }
+startup_timeout_sec = 15.5
+tool_timeout_sec = 60
+required = true
+[mcp_servers.github.tools.delete]
+approval_mode = "approve"
+"#;
+		let mut config = parse(original).unwrap();
+		assert_eq!(config.mcps.len(), 1);
+		assert!(!config.mcps[0].enabled);
+		assert!(
+			matches!(&config.mcps[0].transport, McpTransport::StreamableHttp { headers: Some(headers), .. } if headers["X-Version"] == "1")
+		);
+		config.mcps[0].enabled = true;
+		let output = serialize(&config, Some(original)).unwrap();
+		let before = parse_toml(original).unwrap();
+		let after = parse_toml(&output).unwrap();
+		assert_eq!(
+			after["mcp_servers"]["github"]["enabled"].as_bool(),
+			Some(true)
+		);
+		for key in [
+			"url",
+			"bearer_token_env_var",
+			"env_http_headers",
+			"http_headers",
+			"startup_timeout_sec",
+			"tool_timeout_sec",
+			"required",
+			"tools",
+		] {
+			assert_eq!(
+				after["mcp_servers"]["github"][key],
+				before["mcp_servers"]["github"][key]
+			);
+		}
+		assert!(output.contains("# user's model choice"));
+	}
 
 	#[test]
 	fn parse_basic_servers() {
@@ -297,5 +354,47 @@ model = "gpt-5.4"
 "#;
 		let config = parse(content).unwrap();
 		assert!(config.mcps.is_empty());
+	}
+
+	#[test]
+	fn editing_stdio_preserves_unparsed_servers() {
+		let original = r#"
+[mcp_servers.remote]
+url = "https://mcp.example.test/mcp"
+bearer_token_env_var = "MCP_TOKEN"
+enabled = false
+
+[mcp_servers.remote.oauth]
+client_id = "example-client"
+
+[mcp_servers.unsupported]
+custom_transport = "future"
+
+[mcp_servers.local]
+command = "old-command"
+"#;
+		let mut config = parse(original).unwrap();
+		assert_eq!(config.mcps.len(), 2);
+		config.mcps.retain(|mcp| mcp.name != "local");
+		config.mcps.push(McpServer::new(
+			"replacement",
+			McpTransport::stdio("new-command", vec![]),
+		));
+		let output = serialize(&config, Some(original)).unwrap();
+		let before = parse_toml(original).unwrap();
+		let after = parse_toml(&output).unwrap();
+		assert_eq!(
+			after["mcp_servers"]["remote"],
+			before["mcp_servers"]["remote"]
+		);
+		assert_eq!(
+			after["mcp_servers"]["unsupported"],
+			before["mcp_servers"]["unsupported"]
+		);
+		assert!(after["mcp_servers"].get("local").is_none());
+		assert_eq!(
+			after["mcp_servers"]["replacement"]["command"].as_str(),
+			Some("new-command")
+		);
 	}
 }

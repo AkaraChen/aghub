@@ -75,7 +75,10 @@ pub fn list_agents(_auth: ApiAuth) -> Json<Vec<AgentInfo>> {
 							project: d.capabilities.mcp.scopes.project,
 						},
 						stdio: d.capabilities.mcp.stdio,
-						remote: d.capabilities.mcp.remote,
+						remote: d.capabilities.mcp.sse
+							|| d.capabilities.mcp.streamable_http,
+						sse: d.capabilities.mcp.sse,
+						streamable_http: d.capabilities.mcp.streamable_http,
 						enable_disable: d.capabilities.mcp.enable_disable,
 					},
 					sub_agents: SubAgentCapabilitiesDto {
