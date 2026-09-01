@@ -36,8 +36,8 @@ test("preserves source order when the first server is installed", async ({
 		page.getByRole("button", { name: "Installed", exact: true }),
 	).toBeVisible();
 	await expect(page.locator('[data-slot="card-title"]')).toHaveText([
-		"Remote Demo",
-		"Other server",
+		server.name,
+		"io.github.acme/other",
 	]);
 });
 
@@ -51,7 +51,7 @@ test("shows the full catalog identity, version, description and update time", as
 	await page.goto("/market?tab=mcp");
 	const card = page
 		.locator('[data-slot="card"]')
-		.filter({ hasText: "Remote Demo" });
+		.filter({ hasText: server.name });
 	await expect(card.getByText(server.name, { exact: true })).toBeVisible();
 	await expect(card.getByText("v1.0.0", { exact: true })).toBeVisible();
 	await expect(card.locator("time")).toHaveAttribute(
@@ -102,17 +102,21 @@ test("loads subsequent pages, keeps results on failure, and resets the search cu
 	await expect(
 		page.getByRole("button", { name: "Retry loading more" }),
 	).toBeVisible({ timeout: 15000 });
-	await expect(page.getByText("Remote Demo", { exact: true })).toBeVisible();
+	await expect(page.getByText(server.name, { exact: true })).toBeVisible();
 	failNextPage = false;
 	await page.getByRole("button", { name: "Retry loading more" }).click();
-	await expect(page.getByText("Next server", { exact: true })).toBeVisible();
+	await expect(
+		page.getByText("io.github.acme/next", { exact: true }),
+	).toBeVisible();
 	await expect(
 		page.getByRole("button", { name: "Load more", exact: true }),
 	).toBeHidden();
 	expect(requests.at(-1)?.get("cursor")).toBe(cursor);
 	await page.getByRole("searchbox").fill("calendar");
 	await page.getByRole("searchbox").press("Enter");
-	await expect(page.getByText("Next server", { exact: true })).toBeHidden();
+	await expect(
+		page.getByText("io.github.acme/next", { exact: true }),
+	).toBeHidden();
 	expect(requests.at(-1)?.get("q")).toBe("calendar");
 	expect(requests.at(-1)?.has("cursor")).toBe(false);
 });
@@ -138,14 +142,16 @@ test("keeps pagination available after a transport filter hides the loaded page"
 		page.getByRole("button", { name: "Add", exact: true }),
 	).toBeHidden();
 	await page.getByRole("button", { name: "Type: All" }).click();
-	await page.getByRole("option", { name: "HTTP", exact: true }).click();
+	await page
+		.getByRole("option", { name: "Streamable HTTP", exact: true })
+		.click();
 	await expect(
 		page.getByText(
 			"No matches in loaded results. More results are available.",
 		),
 	).toBeVisible();
 	await page.getByRole("button", { name: "Load more", exact: true }).click();
-	await expect(page.getByText("Remote Demo", { exact: true })).toBeVisible();
+	await expect(page.getByText(server.name, { exact: true })).toBeVisible();
 });
 
 test("starts a separate cursor chain when switching registry source", async ({
@@ -182,8 +188,8 @@ test("starts a separate cursor chain when switching registry source", async ({
 	await dialog.getByLabel("Name").fill("Team registry");
 	await dialog.getByLabel("URL").fill("https://registry.example.test");
 	await dialog.getByRole("button", { name: "Add", exact: true }).click();
-	await expect(page.getByText("Team catalog", { exact: true })).toBeVisible();
-	await expect(page.getByText("Remote Demo", { exact: true })).toBeHidden();
+	await expect(page.getByText("team/catalog", { exact: true })).toBeVisible();
+	await expect(page.getByText(server.name, { exact: true })).toBeHidden();
 	expect(requests.at(-1)?.get("registry_url")).toBe(
 		"https://registry.example.test/",
 	);

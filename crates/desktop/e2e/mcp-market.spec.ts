@@ -6,7 +6,9 @@ let mocks: Awaited<ReturnType<typeof installMocks>>;
 test.beforeEach(async ({ page }) => {
 	mocks = await installMocks(page);
 	await page.goto("/market?tab=mcp");
-	await expect(page.getByText("Remote Demo")).toBeVisible();
+	await expect(
+		page.getByText("io.github.acme/remote-demo", { exact: true }),
+	).toBeVisible();
 });
 
 test("install form enforces registry input and transport capability", async ({
@@ -37,7 +39,7 @@ test("install form enforces registry input and transport capability", async ({
 test("uses the same card surface as the agent overview", async ({ page }) => {
 	const card = page
 		.locator('[data-slot="card"]')
-		.filter({ hasText: "Remote Demo" });
+		.filter({ hasText: "io.github.acme/remote-demo" });
 
 	await expect(card).toHaveClass(/card--default/);
 });
