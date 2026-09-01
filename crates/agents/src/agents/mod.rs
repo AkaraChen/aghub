@@ -8,6 +8,7 @@ pub mod copilot;
 pub mod cursor;
 pub mod factory;
 pub mod gemini;
+pub mod grok;
 pub mod jetbrains_ai;
 pub mod kilocode;
 pub mod kimi;

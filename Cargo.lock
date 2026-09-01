@@ -86,6 +86,7 @@ dependencies = [
  "aghub-markdown",
  "dirs 6.0.0",
  "libc",
+ "log",
  "serde",
  "serde_json",
  "serde_yaml",

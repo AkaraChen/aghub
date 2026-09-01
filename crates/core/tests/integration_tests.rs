@@ -672,6 +672,7 @@ fn test_legacy_sse_backward_compatibility() {
 test_mcp_workflow! {
 	test_antigravity_mcp_workflow => AgentType::Antigravity, "ag-mcp",
 	test_codex_mcp_workflow => AgentType::Codex, "codex-mcp",
+	test_grok_mcp_workflow => AgentType::Grok, "grok-mcp",
 	test_kiro_mcp_workflow => AgentType::Kiro, "kiro-mcp",
 	test_cursor_mcp_workflow => AgentType::Cursor, "cursor-mcp",
 	test_windsurf_mcp_workflow => AgentType::Windsurf, "windsurf-mcp",

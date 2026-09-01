@@ -149,4 +149,30 @@ mod tests {
 			.any(|path| path == ".agents/skills"));
 		assert!(codex.skills_paths.project_write.is_none());
 	}
+
+	#[test]
+	fn list_agents_includes_grok_standard_capabilities() {
+		let agents = list_agents(ApiAuth).into_inner();
+		let grok = agents
+			.into_iter()
+			.find(|agent| agent.id == "grok")
+			.expect("Grok Build should be listed");
+
+		assert_eq!(grok.display_name, "Grok Build");
+		assert!(grok.capabilities.skills.mutable_global);
+		assert!(grok.capabilities.skills.mutable_project);
+		assert!(grok.capabilities.skills.universal);
+		assert!(grok.capabilities.mcp.stdio);
+		assert!(grok.capabilities.mcp.remote);
+		assert!(grok.capabilities.mcp.enable_disable);
+		assert_eq!(
+			grok.skills_paths.project_write.as_deref(),
+			Some(".grok/skills")
+		);
+		assert!(grok
+			.skills_paths
+			.project_read
+			.iter()
+			.any(|path| path == ".agents/skills"));
+	}
 }

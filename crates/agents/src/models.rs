@@ -260,6 +260,7 @@ pub enum ResourceScope {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentType {
 	Cursor,
+	Grok,
 	Windsurf,
 	Copilot,
 	Claude,
@@ -288,6 +289,7 @@ pub enum AgentType {
 impl AgentType {
 	pub const ALL: &[AgentType] = &[
 		AgentType::Cursor,
+		AgentType::Grok,
 		AgentType::Windsurf,
 		AgentType::Copilot,
 		AgentType::Claude,
@@ -315,6 +317,7 @@ impl AgentType {
 	pub fn as_str(&self) -> &'static str {
 		match self {
 			AgentType::Cursor => "cursor",
+			AgentType::Grok => "grok",
 			AgentType::Windsurf => "windsurf",
 			AgentType::Copilot => "copilot",
 			AgentType::Claude => "claude",
@@ -352,6 +355,7 @@ impl std::str::FromStr for AgentType {
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s.to_lowercase().as_str() {
 			"cursor" => Ok(AgentType::Cursor),
+			"grok" | "grok-build" => Ok(AgentType::Grok),
 			"windsurf" => Ok(AgentType::Windsurf),
 			"copilot" => Ok(AgentType::Copilot),
 			"claude" => Ok(AgentType::Claude),

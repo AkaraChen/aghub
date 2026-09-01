@@ -25,6 +25,7 @@ fn all_descriptors() -> Vec<(AgentType, &'static AgentDescriptor)> {
 		(AgentType::Cline, &agents::cline::DESCRIPTOR),
 		(AgentType::Copilot, &agents::copilot::DESCRIPTOR),
 		(AgentType::Cursor, &agents::cursor::DESCRIPTOR),
+		(AgentType::Grok, &agents::grok::DESCRIPTOR),
 		(AgentType::Antigravity, &agents::antigravity::DESCRIPTOR),
 		(AgentType::Kiro, &agents::kiro::DESCRIPTOR),
 		(AgentType::Windsurf, &agents::windsurf::DESCRIPTOR),
@@ -1058,4 +1059,35 @@ fn test_fixed_rule_paths() {
 			descriptor.id
 		);
 	}
+}
+
+#[test]
+fn grok_descriptor_matches_standard_client_contract() {
+	use aghub_agents::agents;
+
+	let descriptor = &agents::grok::DESCRIPTOR;
+	let root = PathBuf::from("/project");
+	assert_eq!(descriptor.id, "grok");
+	assert_eq!(descriptor.display_name, "Grok Build");
+	assert_eq!(descriptor.cli_name, "grok");
+	assert_eq!(descriptor.validate_args, &["version"]);
+	assert_eq!(descriptor.skills_cli_name, Some("grok"));
+	assert_eq!(descriptor.project_markers, &[".grok"]);
+	assert_eq!(
+		descriptor.mcp_project_path.unwrap()(&root),
+		Some(root.join(".grok/config.toml"))
+	);
+	assert_eq!(
+		(descriptor.project_skill_paths.unwrap().write)(&root),
+		Some(root.join(".grok/skills"))
+	);
+	assert!(descriptor.capabilities.skills.scopes.global);
+	assert!(descriptor.capabilities.skills.scopes.project);
+	assert!(descriptor.capabilities.skills.universal);
+	assert!(descriptor.capabilities.mcp.scopes.global);
+	assert!(descriptor.capabilities.mcp.scopes.project);
+	assert!(descriptor.capabilities.mcp.stdio);
+	assert!(descriptor.capabilities.mcp.sse);
+	assert!(descriptor.capabilities.mcp.streamable_http);
+	assert!(descriptor.capabilities.mcp.enable_disable);
 }
