@@ -14,7 +14,7 @@ vi.mock(".", () => ({
 	})),
 }));
 
-import { addMcpRegistry } from "./mcp-registries";
+import { addMcpRegistry, removeMcpRegistry } from "./mcp-registries";
 
 describe("addMcpRegistry", () => {
 	beforeEach(() => {
@@ -43,5 +43,24 @@ describe("addMcpRegistry", () => {
 		).resolves.toEqual(existing);
 		expect(storeState.set).not.toHaveBeenCalled();
 		expect(storeState.save).not.toHaveBeenCalled();
+	});
+
+	it("preserves concurrent add and remove mutations", async () => {
+		const existing = {
+			id: "registry-1",
+			name: "Old registry",
+			url: "https://old.example/",
+		};
+		storeState.values.set("mcpRegistries", [existing]);
+
+		const [, created] = await Promise.all([
+			removeMcpRegistry(existing.id),
+			addMcpRegistry({
+				name: "New registry",
+				url: "https://new.example/",
+			}),
+		]);
+
+		expect(storeState.values.get("mcpRegistries")).toEqual([created]);
 	});
 });
