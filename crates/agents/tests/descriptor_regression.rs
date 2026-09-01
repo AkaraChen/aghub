@@ -26,6 +26,10 @@ fn all_descriptors() -> Vec<(AgentType, &'static AgentDescriptor)> {
 		(AgentType::Copilot, &agents::copilot::DESCRIPTOR),
 		(AgentType::Cursor, &agents::cursor::DESCRIPTOR),
 		(AgentType::Grok, &agents::grok::DESCRIPTOR),
+		(
+			AgentType::DeepSeekHarness,
+			&agents::deepseek_harness::DESCRIPTOR,
+		),
 		(AgentType::Antigravity, &agents::antigravity::DESCRIPTOR),
 		(AgentType::Kiro, &agents::kiro::DESCRIPTOR),
 		(AgentType::Windsurf, &agents::windsurf::DESCRIPTOR),
@@ -1090,4 +1094,39 @@ fn grok_descriptor_matches_standard_client_contract() {
 	assert!(descriptor.capabilities.mcp.sse);
 	assert!(descriptor.capabilities.mcp.streamable_http);
 	assert!(descriptor.capabilities.mcp.enable_disable);
+}
+
+#[test]
+fn deepseek_harness_descriptor_matches_skill_contract() {
+	use aghub_agents::agents;
+
+	let descriptor = &agents::deepseek_harness::DESCRIPTOR;
+	let root = PathBuf::from("/project");
+	assert_eq!(descriptor.id, "deepseek-harness");
+	assert_eq!(descriptor.display_name, "DeepSeek Harness");
+	assert_eq!(descriptor.cli_name, "dsh");
+	assert_eq!(descriptor.validate_args, &["--help"]);
+	assert_eq!(descriptor.skills_cli_name, None);
+	assert_eq!(descriptor.project_markers, &[".dsh"]);
+	assert_eq!(
+		(descriptor.project_skill_paths.unwrap().read)(&root),
+		vec![root.join(".dsh/skills")]
+	);
+	assert_eq!(
+		(descriptor.project_skill_paths.unwrap().write)(&root),
+		Some(root.join(".dsh/skills"))
+	);
+	assert!(descriptor.capabilities.skills.scopes.global);
+	assert!(descriptor.capabilities.skills.scopes.project);
+	assert!(descriptor.capabilities.skills.universal);
+	assert!(!descriptor.capabilities.mcp.scopes.global);
+	assert!(!descriptor.capabilities.mcp.scopes.project);
+	assert!(!descriptor.capabilities.skills.discovery.include_nested);
+	assert!(
+		descriptor
+			.capabilities
+			.skills
+			.discovery
+			.include_flat_markdown
+	);
 }

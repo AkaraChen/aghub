@@ -10,7 +10,7 @@ pub use descriptor::{
 	AgentDescriptor, Capabilities, GlobalSkillPaths, LoadMcpsFn,
 	LoadSubAgentsFn, McpCapabilities, McpParseFn, McpSerializeFn,
 	ProjectSkillPaths, SaveMcpsFn, SaveSubAgentsFn, ScopeSupport,
-	SkillCapabilities, SubAgentCapabilities,
+	SkillCapabilities, SkillDiscovery, SubAgentCapabilities,
 };
 pub use errors::{ConfigError, Result};
 pub use models::{

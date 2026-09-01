@@ -44,6 +44,26 @@ pub struct ScopeSupport {
 pub struct SkillCapabilities {
 	pub scopes: ScopeSupport,
 	pub universal: bool,
+	pub discovery: SkillDiscovery,
+	pub universal_global_path: Option<OptionalPathFn>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SkillDiscovery {
+	pub include_nested: bool,
+	pub include_flat_markdown: bool,
+}
+
+impl SkillDiscovery {
+	pub const STANDARD: Self = Self {
+		include_nested: true,
+		include_flat_markdown: false,
+	};
+
+	pub const DIRECT_BUNDLES_AND_MARKDOWN: Self = Self {
+		include_nested: false,
+		include_flat_markdown: true,
+	};
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -196,7 +216,13 @@ impl AgentDescriptor {
 		let mut dirs = self.native_global_skill_read_paths();
 
 		if self.capabilities.skills.universal {
-			if let Some(path) = get_universal_skills_path() {
+			let universal_path = self
+				.capabilities
+				.skills
+				.universal_global_path
+				.and_then(|resolve| resolve())
+				.or_else(get_universal_skills_path);
+			if let Some(path) = universal_path {
 				if !dirs.contains(&path) {
 					dirs.push(path);
 				}

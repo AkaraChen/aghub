@@ -126,10 +126,15 @@ fn extend_skill_target_locations(
 		}
 	}
 	let paths = target.read_paths(scope, project_root);
-	skills.extend(cache.load(&paths).into_iter().map(|mut skill| {
-		skill.config_source = Some(source);
-		skill
-	}));
+	skills.extend(
+		cache
+			.load_for_agent(&paths, target.discovery())
+			.into_iter()
+			.map(|mut skill| {
+				skill.config_source = Some(source);
+				skill
+			}),
+	);
 }
 
 /// Load resources for all registered agents.

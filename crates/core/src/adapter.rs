@@ -2,7 +2,9 @@ use crate::{
 	adapters::AgentAdapter,
 	errors::Result,
 	models::{AgentConfig, McpServer, McpTransport, ResourceScope, SubAgent},
-	skills::discovery::load_skills_from_dirs,
+	skills::discovery::{
+		load_skills_from_dirs_with_options, SkillDiscoveryOptions,
+	},
 	AgentDescriptor,
 };
 use std::cell::RefCell;
@@ -155,7 +157,10 @@ impl AgentAdapter for &'static AgentDescriptor {
 		if self.supports_skill_scope(scope) {
 			let skills_paths = self.get_skills_paths(project_root, scope);
 			if !skills_paths.is_empty() {
-				config.skills = load_skills_from_dirs(&skills_paths);
+				let options = SkillDiscoveryOptions::default()
+					.for_agent(self.capabilities.skills.discovery);
+				config.skills =
+					load_skills_from_dirs_with_options(&skills_paths, options);
 			}
 		}
 

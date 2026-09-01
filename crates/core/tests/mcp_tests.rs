@@ -80,6 +80,8 @@ static ADAPTER_TEST_DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				project: false,
 			},
 			universal: false,
+			discovery: aghub_agents::SkillDiscovery::STANDARD,
+			universal_global_path: None,
 		},
 		mcp: McpCapabilities {
 			scopes: ScopeSupport {

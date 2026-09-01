@@ -3,10 +3,21 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SkillDiscoveryOptions {
 	pub include_nested: bool,
 	pub include_dependencies: bool,
+	pub include_flat_markdown: bool,
+}
+
+impl SkillDiscoveryOptions {
+	pub fn for_agent(self, discovery: aghub_agents::SkillDiscovery) -> Self {
+		Self {
+			include_nested: self.include_nested && discovery.include_nested,
+			include_dependencies: self.include_dependencies,
+			include_flat_markdown: discovery.include_flat_markdown,
+		}
+	}
 }
 
 impl Default for SkillDiscoveryOptions {
@@ -14,13 +25,14 @@ impl Default for SkillDiscoveryOptions {
 		Self {
 			include_nested: true,
 			include_dependencies: true,
+			include_flat_markdown: false,
 		}
 	}
 }
 
 pub(crate) struct SkillLocationCache {
 	options: SkillDiscoveryOptions,
-	locations_by_root: HashMap<PathBuf, Vec<Skill>>,
+	locations_by_root: HashMap<(PathBuf, SkillDiscoveryOptions), Vec<Skill>>,
 }
 
 impl SkillLocationCache {
@@ -32,15 +44,31 @@ impl SkillLocationCache {
 	}
 
 	pub(crate) fn load(&mut self, dirs: &[PathBuf]) -> Vec<Skill> {
+		self.load_with_options(dirs, self.options)
+	}
+
+	pub(crate) fn load_for_agent(
+		&mut self,
+		dirs: &[PathBuf],
+		discovery: aghub_agents::SkillDiscovery,
+	) -> Vec<Skill> {
+		self.load_with_options(dirs, self.options.for_agent(discovery))
+	}
+
+	fn load_with_options(
+		&mut self,
+		dirs: &[PathBuf],
+		options: SkillDiscoveryOptions,
+	) -> Vec<Skill> {
 		let mut skills = Vec::new();
 		let mut seen_locations = HashSet::new();
 
 		for dir in dirs {
-			let options = self.options;
+			let key = (dir.clone(), options);
 			let root_skills =
-				self.locations_by_root.entry(dir.clone()).or_insert_with(
-					|| load_skills_from_dir_with_options(dir, options),
-				);
+				self.locations_by_root.entry(key).or_insert_with(|| {
+					load_skills_from_dir_with_options(dir, options)
+				});
 			for skill in root_skills.iter().cloned() {
 				let location = skill_location_identity(&skill);
 				if location
@@ -81,6 +109,13 @@ pub fn load_skills_from_dir_with_options(
 
 /// Load skills from multiple directories
 pub fn load_skills_from_dirs(dirs: &[PathBuf]) -> Vec<Skill> {
+	load_skills_from_dirs_with_options(dirs, SkillDiscoveryOptions::default())
+}
+
+pub fn load_skills_from_dirs_with_options(
+	dirs: &[PathBuf],
+	options: SkillDiscoveryOptions,
+) -> Vec<Skill> {
 	let mut all_skills = Vec::new();
 	let mut seen_names = std::collections::HashSet::new();
 
@@ -89,13 +124,7 @@ pub fn load_skills_from_dirs(dirs: &[PathBuf]) -> Vec<Skill> {
 		let mut visited = HashSet::new();
 		let linked_root = fs::symlink_metadata(dir)
 			.is_ok_and(|metadata| metadata.file_type().is_symlink());
-		collect_skills(
-			dir,
-			&mut skills,
-			SkillDiscoveryOptions::default(),
-			linked_root,
-			&mut visited,
-		);
+		collect_skills(dir, &mut skills, options, linked_root, &mut visited);
 
 		for skill in skills {
 			if seen_names.insert(skill.name.clone()) {
@@ -151,13 +180,37 @@ fn collect_skills(
 	let Ok(entries) = fs::read_dir(dir) else {
 		return;
 	};
+	let mut entries = entries.flatten().collect::<Vec<_>>();
+	entries.sort_by_key(|entry| entry.file_name());
 
-	for entry in entries.flatten() {
+	for entry in entries {
 		let path = entry.path();
 		let Ok(file_type) = entry.file_type() else {
 			continue;
 		};
 		let is_link = file_type.is_symlink();
+		if options.include_flat_markdown
+			&& (file_type.is_file() || is_link)
+			&& path
+				.extension()
+				.is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+		{
+			let parse_path = if is_link {
+				fs::canonicalize(&path).unwrap_or_else(|_| path.clone())
+			} else {
+				path.clone()
+			};
+			if let Ok(skill_pkg) = skill::parser::parse(&parse_path) {
+				let mut skill = crate::convert_skill(skill_pkg);
+				if is_link {
+					skill.source_path = crate::format_path_with_tilde(&path);
+					skill.canonical_path =
+						crate::format_path_with_tilde(&parse_path);
+				}
+				skills.push(skill);
+			}
+			continue;
+		}
 		if !is_link && !file_type.is_dir() {
 			continue;
 		}
@@ -265,6 +318,7 @@ mod tests {
 			SkillDiscoveryOptions {
 				include_nested: false,
 				include_dependencies: false,
+				include_flat_markdown: false,
 			},
 		);
 		assert_eq!(
@@ -280,6 +334,7 @@ mod tests {
 			SkillDiscoveryOptions {
 				include_nested: true,
 				include_dependencies: false,
+				include_flat_markdown: false,
 			},
 		);
 		assert_eq!(
@@ -295,6 +350,7 @@ mod tests {
 			SkillDiscoveryOptions {
 				include_nested: true,
 				include_dependencies: true,
+				include_flat_markdown: false,
 			},
 		);
 		assert_eq!(
@@ -303,6 +359,36 @@ mod tests {
 				.collect::<Vec<_>>(),
 			vec!["dependency", "direct", "nested"]
 		);
+	}
+
+	#[test]
+	fn discovery_options_read_direct_flat_markdown() {
+		let temp = tempfile::tempdir().unwrap();
+		let root = temp.path().join("skills");
+		let nested = root.join("collection/nested");
+		fs::create_dir_all(&nested).unwrap();
+		fs::write(
+			root.join("flat.md"),
+			"---\nname: flat\ndescription: Flat skill\n---\n",
+		)
+		.unwrap();
+		fs::write(
+			nested.join("SKILL.md"),
+			"---\nname: nested\ndescription: Nested skill\n---\n",
+		)
+		.unwrap();
+
+		let skills = load_skills_from_dir_with_options(
+			&root,
+			SkillDiscoveryOptions {
+				include_nested: false,
+				include_dependencies: false,
+				include_flat_markdown: true,
+			},
+		);
+
+		assert_eq!(skills.len(), 1);
+		assert_eq!(skills[0].name, "flat");
 	}
 
 	#[test]
@@ -436,6 +522,7 @@ mod tests {
 			SkillDiscoveryOptions {
 				include_nested: true,
 				include_dependencies: false,
+				include_flat_markdown: false,
 			},
 		);
 		let skills = load_skills_from_dir_with_options(
@@ -443,6 +530,7 @@ mod tests {
 			SkillDiscoveryOptions {
 				include_nested: true,
 				include_dependencies: true,
+				include_flat_markdown: false,
 			},
 		);
 

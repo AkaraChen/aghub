@@ -10,6 +10,7 @@ pub static ALL_AGENTS: &[&AgentDescriptor] = &[
 	&agents::copilot::DESCRIPTOR,
 	&agents::cursor::DESCRIPTOR,
 	&agents::grok::DESCRIPTOR,
+	&agents::deepseek_harness::DESCRIPTOR,
 	&agents::antigravity::DESCRIPTOR,
 	&agents::kiro::DESCRIPTOR,
 	&agents::windsurf::DESCRIPTOR,

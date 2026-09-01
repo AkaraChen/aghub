@@ -92,6 +92,15 @@ impl SkillTarget {
 			Self::Agent(agent) => agent_skill_paths(agent, project_root, scope),
 		}
 	}
+
+	pub(crate) fn discovery(self) -> aghub_agents::SkillDiscovery {
+		match self {
+			Self::Universal => aghub_agents::SkillDiscovery::STANDARD,
+			Self::Agent(agent) => {
+				registry::get(agent).capabilities.skills.discovery
+			}
+		}
+	}
 }
 
 fn resolve_destination_identity(path: PathBuf) -> PathBuf {
@@ -346,8 +355,11 @@ impl AgentAdapter for SkillTargetAdapter {
 		scope: ResourceScope,
 	) -> Result<AgentConfig> {
 		let mut config = AgentConfig::new();
-		config.skills = crate::skills::load_skills_from_dirs(
+		let options = crate::skills::SkillDiscoveryOptions::default()
+			.for_agent(self.target.discovery());
+		config.skills = crate::skills::load_skills_from_dirs_with_options(
 			&self.target.read_paths(scope, project_root),
+			options,
 		);
 		Ok(config)
 	}

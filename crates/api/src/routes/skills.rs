@@ -193,6 +193,7 @@ impl SkillListParams {
 		SkillDiscoveryOptions {
 			include_nested: self.include_nested.unwrap_or(true),
 			include_dependencies: self.include_dependencies.unwrap_or(true),
+			include_flat_markdown: false,
 		}
 	}
 }
@@ -4013,6 +4014,7 @@ mod tests {
 			SkillDiscoveryOptions {
 				include_nested: true,
 				include_dependencies: true,
+				include_flat_markdown: false,
 			}
 		);
 	}
@@ -4034,6 +4036,7 @@ mod tests {
 			SkillDiscoveryOptions {
 				include_nested: false,
 				include_dependencies: false,
+				include_flat_markdown: false,
 			}
 		);
 	}

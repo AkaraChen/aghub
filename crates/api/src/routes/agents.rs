@@ -175,4 +175,29 @@ mod tests {
 			.iter()
 			.any(|path| path == ".agents/skills"));
 	}
+
+	#[test]
+	fn list_agents_includes_deepseek_harness_skill_capabilities() {
+		let agents = list_agents(ApiAuth).into_inner();
+		let deepseek = agents
+			.into_iter()
+			.find(|agent| agent.id == "deepseek-harness")
+			.expect("DeepSeek Harness should be listed");
+
+		assert_eq!(deepseek.display_name, "DeepSeek Harness");
+		assert!(deepseek.capabilities.skills.mutable_global);
+		assert!(deepseek.capabilities.skills.mutable_project);
+		assert!(deepseek.capabilities.skills.universal);
+		assert!(!deepseek.capabilities.mcp.stdio);
+		assert!(!deepseek.capabilities.mcp.remote);
+		assert_eq!(
+			deepseek.skills_paths.project_write.as_deref(),
+			Some(".dsh/skills")
+		);
+		assert!(deepseek
+			.skills_paths
+			.project_read
+			.iter()
+			.any(|path| path == ".agents/skills"));
+	}
 }

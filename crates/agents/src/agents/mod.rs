@@ -6,6 +6,7 @@ pub mod cline;
 pub mod codex;
 pub mod copilot;
 pub mod cursor;
+pub mod deepseek_harness;
 pub mod factory;
 pub mod gemini;
 pub mod grok;

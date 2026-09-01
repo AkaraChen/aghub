@@ -261,6 +261,7 @@ pub enum ResourceScope {
 pub enum AgentType {
 	Cursor,
 	Grok,
+	DeepSeekHarness,
 	Windsurf,
 	Copilot,
 	Claude,
@@ -290,6 +291,7 @@ impl AgentType {
 	pub const ALL: &[AgentType] = &[
 		AgentType::Cursor,
 		AgentType::Grok,
+		AgentType::DeepSeekHarness,
 		AgentType::Windsurf,
 		AgentType::Copilot,
 		AgentType::Claude,
@@ -318,6 +320,7 @@ impl AgentType {
 		match self {
 			AgentType::Cursor => "cursor",
 			AgentType::Grok => "grok",
+			AgentType::DeepSeekHarness => "deepseek-harness",
 			AgentType::Windsurf => "windsurf",
 			AgentType::Copilot => "copilot",
 			AgentType::Claude => "claude",
@@ -356,6 +359,9 @@ impl std::str::FromStr for AgentType {
 		match s.to_lowercase().as_str() {
 			"cursor" => Ok(AgentType::Cursor),
 			"grok" | "grok-build" => Ok(AgentType::Grok),
+			"deepseek" | "deepseek-harness" | "dsh" => {
+				Ok(AgentType::DeepSeekHarness)
+			}
 			"windsurf" => Ok(AgentType::Windsurf),
 			"copilot" => Ok(AgentType::Copilot),
 			"claude" => Ok(AgentType::Claude),
