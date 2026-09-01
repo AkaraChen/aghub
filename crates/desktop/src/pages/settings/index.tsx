@@ -76,7 +76,14 @@ export default function SettingsPage() {
 									id="prompts"
 									className={settingsTabClassName}
 								>
-									{t("promptsAndRules")}
+									{t("prompts")}
+									<Tabs.Indicator />
+								</Tabs.Tab>
+								<Tabs.Tab
+									id="rules"
+									className={settingsTabClassName}
+								>
+									{t("rules")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
 								<Tabs.Tab
@@ -148,10 +155,11 @@ export default function SettingsPage() {
 					</Tabs.Panel>
 
 					<Tabs.Panel id="prompts">
-						<div className="space-y-4">
-							<PromptDataPanel />
-							<RuleVersionDataPanel />
-						</div>
+						<PromptDataPanel />
+					</Tabs.Panel>
+
+					<Tabs.Panel id="rules">
+						<RuleVersionDataPanel />
 					</Tabs.Panel>
 
 					<Tabs.Panel id="logs">

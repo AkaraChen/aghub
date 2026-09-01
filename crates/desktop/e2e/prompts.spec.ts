@@ -402,10 +402,12 @@ test("exports and merges a versioned prompt backup from settings", async ({
 
 	await page.setViewportSize({ width: 1920, height: 1080 });
 	await page.goto("/settings?tab=prompts");
-	await expect(page.getByRole("tab", { name: "Prompts & Rules" })).toHaveCSS(
-		"white-space",
-		"nowrap",
-	);
+	await expect(
+		page.getByRole("tab", { name: "Prompts", exact: true }),
+	).toHaveCSS("white-space", "nowrap");
+	await expect(
+		page.getByRole("tab", { name: "Rules", exact: true }),
+	).toBeVisible();
 	await expect(page.getByRole("tab", { name: "Appearance" })).toBeVisible();
 	await expect(page.getByRole("tab", { name: "About" })).toBeVisible();
 	await expect(

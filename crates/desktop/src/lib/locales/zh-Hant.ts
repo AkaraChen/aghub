@@ -28,7 +28,6 @@ export default {
 	subAgentDescriptionPlaceholder: "這個子Agent的作用是什麼？",
 	subAgentInstructionPlaceholder: "子Agent的系統提示詞/指令...",
 	prompts: "提示詞",
-	promptsAndRules: "提示詞與規則",
 	noPrompts: "尚無提示詞",
 	noPromptsMatch: "沒有符合的提示詞",
 	noPromptsDescription: "建立你的第一個提示詞。",

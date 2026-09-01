@@ -29,7 +29,6 @@ export default {
 	subAgentInstructionPlaceholder:
 		"System prompt / instruction for this sub-agent...",
 	prompts: "Prompts",
-	promptsAndRules: "Prompts & Rules",
 	noPrompts: "No prompts yet",
 	noPromptsMatch: "No prompts match your search",
 	noPromptsDescription: "Create your first prompt to get started.",

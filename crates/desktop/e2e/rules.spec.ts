@@ -168,17 +168,29 @@ test("global search opens a rule file", async ({ page }) => {
 	).toBeVisible();
 });
 
-test("settings keep prompt data and rule versions together", async ({
+test("settings keep prompt data and rule versions separate", async ({
 	page,
 }) => {
 	await page.goto("/settings?tab=prompts");
 
 	await expect(
-		page.getByRole("tab", { name: "Prompts & Rules" }),
+		page.getByRole("tab", { name: "Prompts", exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("tab", { name: "Rules", exact: true }),
 	).toBeVisible();
 	await expect(
 		page.getByRole("heading", { name: "Local prompt library" }),
 	).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "Rule version history" }),
+	).toBeHidden();
+
+	await page.getByRole("tab", { name: "Rules", exact: true }).click();
+	await expect(page).toHaveURL(/\/settings\?tab=rules/);
+	await expect(
+		page.getByRole("heading", { name: "Local prompt library" }),
+	).toBeHidden();
 	await expect(
 		page.getByRole("heading", { name: "Rule version history" }),
 	).toBeVisible();
