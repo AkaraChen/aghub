@@ -1,0 +1,55 @@
+[data-settings-tabs-list] {
+	position: relative;
+	isolation: isolate;
+	display: flex;
+	width: max-content;
+	max-width: 100%;
+	min-width: 0;
+	flex: 0 1 auto;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	padding: 0 0.25rem;
+	background: transparent;
+}
+
+[data-settings-tabs-list]::before,
+[data-settings-tabs-list]::after {
+	position: absolute;
+	z-index: -1;
+	border-radius: calc(var(--radius) * 2.5);
+	background: var(--default);
+	content: "";
+	pointer-events: none;
+}
+
+[data-settings-tabs-list]::before {
+	top: var(--settings-tabs-row-1-top, 0);
+	right: var(--settings-tabs-row-1-right, 0);
+	left: var(--settings-tabs-row-1-left, 0);
+	height: var(--settings-tabs-row-1-height, 2.5rem);
+}
+
+[data-settings-tabs-list]::after {
+	display: none;
+	top: var(--settings-tabs-row-2-top, 2.5rem);
+	right: var(--settings-tabs-row-2-right, 0);
+	left: var(--settings-tabs-row-2-left, 0);
+	height: var(--settings-tabs-row-2-height, 2.5rem);
+}
+
+[data-settings-tabs-list][data-row-count="2"]::before {
+	border-bottom-right-radius: 0;
+}
+
+[data-settings-tabs-list][data-row-count="2"]::after {
+	display: block;
+	border-top-left-radius: 0;
+	border-top-right-radius: 0;
+	box-shadow: 0 -1px 0 var(--default);
+}
+
+[data-settings-tabs-list] > [role="tab"] {
+	width: auto;
+	flex: none;
+	margin-block: 0.25rem;
+}
