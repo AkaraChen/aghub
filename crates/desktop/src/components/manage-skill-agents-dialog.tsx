@@ -91,7 +91,9 @@ export function ManageSkillAgentsDialog({
 	const usableAgents = useMemo(
 		() =>
 			(availableAgents ?? []).filter(
-				(a) => a?.isUsable && supportsIndividualSkillTarget(a, scope),
+				(a) =>
+					a?.isConfigurable &&
+					supportsIndividualSkillTarget(a, scope),
 			),
 		[availableAgents, scope],
 	);
@@ -327,7 +329,7 @@ export function ManageSkillAgentsDialog({
 	const disabledAgents = useMemo(() => {
 		const disabled = new Set<string>();
 		for (const agent of usableAgents) {
-			if (agent.availability && !agent.availability.is_available) {
+			if (!agent.isConfigurable) {
 				disabled.add(agent.id);
 			}
 		}

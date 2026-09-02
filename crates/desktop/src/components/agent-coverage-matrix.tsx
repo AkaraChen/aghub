@@ -81,7 +81,7 @@ export function AgentCoverageMatrix({
 		const agents = availableAgents
 			.filter(
 				(agent) =>
-					agent.isUsable &&
+					agent.isConfigurable &&
 					(kind === "skill"
 						? supportsIndividualSkillTarget(agent, scope)
 						: supportsMcpScope(agent, scope)),

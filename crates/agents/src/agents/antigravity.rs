@@ -16,13 +16,19 @@ define_skill_paths! {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "antigravity",
 	display_name: "Antigravity",
+	surfaces: &[AgentSurface::cli(
+		"cli",
+		&["antigravity"],
+		&[global_data_dir],
+		&["--version"],
+	)],
+	precedence: ResourcePrecedence::uniform(ScopePrecedence::ProjectThenGlobal),
 	mcp_parse_config: Some(mcp_strategy::parse_json_map_mcp_servers),
 	mcp_serialize_config: Some(mcp_strategy::serialize_json_map_mcp_servers),
 	load_mcps,
 	save_mcps,
 	mcp_global_path: Some(mcp_global_path),
 	mcp_project_path: Some(mcp_project_path),
-	global_data_dir,
 	capabilities: Capabilities {
 		skills: SkillCapabilities {
 			scopes: ScopeSupport {
@@ -53,15 +59,17 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	global_skill_paths: Some(GlobalSkillPaths {
 		read: global_skills_paths,
 		write: global_skill_write_path,
+		classify: None,
 	}),
 	project_skill_paths: Some(ProjectSkillPaths {
 		read: project_skills_paths,
 		write: project_skill_write_path,
+		classify: None,
 	}),
+	global_sub_agent_paths: None,
+	project_sub_agent_paths: None,
 	load_sub_agents: load_sub_agents_noop,
 	save_sub_agents: save_sub_agents_noop,
-	cli_name: "antigravity",
-	validate_args: &["--version"],
 	project_markers: &[".gemini/antigravity"],
 	skills_cli_name: Some("antigravity"),
 	rule_paths: None,

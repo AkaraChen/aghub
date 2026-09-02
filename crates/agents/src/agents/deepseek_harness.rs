@@ -83,13 +83,19 @@ fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "deepseek-harness",
 	display_name: "DeepSeek Harness",
+	surfaces: &[AgentSurface::cli(
+		"cli",
+		&["dsh"],
+		&[global_data_dir],
+		&["--help"],
+	)],
+	precedence: ResourcePrecedence::uniform(ScopePrecedence::ProjectThenGlobal),
 	mcp_parse_config: None,
 	mcp_serialize_config: None,
 	load_mcps,
 	save_mcps,
 	mcp_global_path: None,
 	mcp_project_path: None,
-	global_data_dir,
 	capabilities: Capabilities {
 		skills: SkillCapabilities {
 			scopes: ScopeSupport {
@@ -120,15 +126,17 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	global_skill_paths: Some(GlobalSkillPaths {
 		read: global_skills_paths,
 		write: global_skill_write_path,
+		classify: None,
 	}),
 	project_skill_paths: Some(ProjectSkillPaths {
 		read: project_skills_paths,
 		write: project_skill_write_path,
+		classify: None,
 	}),
+	global_sub_agent_paths: None,
+	project_sub_agent_paths: None,
 	load_sub_agents: load_sub_agents_noop,
 	save_sub_agents: save_sub_agents_noop,
-	cli_name: "dsh",
-	validate_args: &["--help"],
 	project_markers: &[".dsh"],
 	skills_cli_name: None,
 	rule_paths: None,

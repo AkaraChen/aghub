@@ -141,7 +141,7 @@ impl TestConfig {
 	pub fn validate_with_agent(&self) -> Result<()> {
 		let adapter = self.create_adapter();
 		let output = adapter
-			.validate_command(Some(&self.config_path))
+			.validate_command(Some(&self.config_path))?
 			.output()
 			.map_err(ConfigError::Io)?;
 		if !output.status.success() {

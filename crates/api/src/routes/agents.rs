@@ -1,12 +1,17 @@
-use aghub_core::{availability, registry};
+use aghub_core::{
+	availability::{self, DetectionProbeKind, DetectionState, ProbeResult},
+	registry, AgentSurfaceKind, Capabilities, ResourceScope,
+};
 use rocket::serde::json::Json;
 use std::path::Path;
 
 use crate::auth::ApiAuth;
 use crate::dto::agents::{
-	AgentAvailabilityDto, AgentInfo, CapabilitiesDto, McpCapabilitiesDto,
-	ScopeSupportDto, SkillCapabilitiesDto, SkillsPathsDto,
-	SubAgentCapabilitiesDto,
+	AgentAvailabilityDto, AgentInfo, AgentSurfaceAvailabilityDto,
+	AgentSurfaceInfoDto, AgentSurfaceKindDto, CapabilitiesDto,
+	ConfigurationEvidenceDto, DetectionEvidenceDto, DetectionProbeKindDto,
+	DetectionResultDto, DetectionStateDto, McpCapabilitiesDto, ScopeSupportDto,
+	SkillCapabilitiesDto, SkillsPathsDto, SubAgentCapabilitiesDto,
 };
 
 fn format_path(path: std::path::PathBuf) -> String {
@@ -19,6 +24,66 @@ fn format_path(path: std::path::PathBuf) -> String {
 		format!("~{}", &s[home.len()..])
 	} else {
 		s.into_owned()
+	}
+}
+
+fn surface_kind(kind: AgentSurfaceKind) -> AgentSurfaceKindDto {
+	match kind {
+		AgentSurfaceKind::Cli => AgentSurfaceKindDto::Cli,
+		AgentSurfaceKind::Ide => AgentSurfaceKindDto::Ide,
+		AgentSurfaceKind::Desktop => AgentSurfaceKindDto::Desktop,
+		AgentSurfaceKind::Cloud => AgentSurfaceKindDto::Cloud,
+		AgentSurfaceKind::RemoteWorkspace => {
+			AgentSurfaceKindDto::RemoteWorkspace
+		}
+	}
+}
+
+fn detection_state(state: DetectionState) -> DetectionStateDto {
+	match state {
+		DetectionState::Detected => DetectionStateDto::Detected,
+		DetectionState::NotDetected => DetectionStateDto::NotDetected,
+		DetectionState::Unknown => DetectionStateDto::Unknown,
+		DetectionState::Error => DetectionStateDto::Error,
+	}
+}
+
+fn capabilities_dto(
+	descriptor: &aghub_core::AgentDescriptor,
+	capabilities: Capabilities,
+	mutable_project: bool,
+) -> CapabilitiesDto {
+	CapabilitiesDto {
+		skills: SkillCapabilitiesDto {
+			scopes: ScopeSupportDto {
+				global: capabilities.skills.scopes.global,
+				project: capabilities.skills.scopes.project,
+			},
+			universal: capabilities.skills.universal,
+			mutable_global: capabilities.skills.scopes.global
+				&& descriptor
+					.skill_write_path(None, ResourceScope::GlobalOnly)
+					.is_some(),
+			mutable_project: capabilities.skills.scopes.project
+				&& mutable_project,
+		},
+		mcp: McpCapabilitiesDto {
+			scopes: ScopeSupportDto {
+				global: capabilities.mcp.scopes.global,
+				project: capabilities.mcp.scopes.project,
+			},
+			stdio: capabilities.mcp.stdio,
+			remote: capabilities.mcp.sse || capabilities.mcp.streamable_http,
+			sse: capabilities.mcp.sse,
+			streamable_http: capabilities.mcp.streamable_http,
+			enable_disable: capabilities.mcp.enable_disable,
+		},
+		sub_agents: SubAgentCapabilitiesDto {
+			scopes: ScopeSupportDto {
+				global: capabilities.sub_agents.scopes.global,
+				project: capabilities.sub_agents.scopes.project,
+			},
+		},
 	}
 }
 
@@ -50,44 +115,30 @@ pub fn list_agents(_auth: ApiAuth) -> Json<Vec<AgentInfo>> {
 					aghub_core::models::ResourceScope::GlobalOnly,
 				)
 				.map(format_path);
+			let mutable_project = project_write.is_some();
+			let surfaces = d
+				.surfaces
+				.iter()
+				.map(|surface| AgentSurfaceInfoDto {
+					id: surface.id.to_string(),
+					kind: surface_kind(surface.kind),
+					capabilities: capabilities_dto(
+						d,
+						surface.capabilities.unwrap_or(d.capabilities),
+						mutable_project,
+					),
+				})
+				.collect();
 
 			AgentInfo {
 				id: d.id.to_string(),
 				display_name: d.display_name.to_string(),
-				capabilities: CapabilitiesDto {
-					skills: SkillCapabilitiesDto {
-						scopes: ScopeSupportDto {
-							global: d.capabilities.skills.scopes.global,
-							project: d.capabilities.skills.scopes.project,
-						},
-						universal: d.capabilities.skills.universal,
-						mutable_global: d
-							.skill_write_path(
-								None,
-								aghub_core::models::ResourceScope::GlobalOnly,
-							)
-							.is_some(),
-						mutable_project: project_write.is_some(),
-					},
-					mcp: McpCapabilitiesDto {
-						scopes: ScopeSupportDto {
-							global: d.capabilities.mcp.scopes.global,
-							project: d.capabilities.mcp.scopes.project,
-						},
-						stdio: d.capabilities.mcp.stdio,
-						remote: d.capabilities.mcp.sse
-							|| d.capabilities.mcp.streamable_http,
-						sse: d.capabilities.mcp.sse,
-						streamable_http: d.capabilities.mcp.streamable_http,
-						enable_disable: d.capabilities.mcp.enable_disable,
-					},
-					sub_agents: SubAgentCapabilitiesDto {
-						scopes: ScopeSupportDto {
-							global: d.capabilities.sub_agents.scopes.global,
-							project: d.capabilities.sub_agents.scopes.project,
-						},
-					},
-				},
+				surfaces,
+				capabilities: capabilities_dto(
+					d,
+					d.capabilities,
+					mutable_project,
+				),
 				skills_paths: SkillsPathsDto {
 					global_read,
 					global_write,
@@ -108,9 +159,51 @@ pub fn check_availability(_auth: ApiAuth) -> Json<Vec<AgentAvailabilityDto>> {
 		.into_iter()
 		.map(|info| AgentAvailabilityDto {
 			id: info.agent_id.to_string(),
-			has_global_directory: info.has_global_directory,
-			has_cli: info.has_cli,
-			is_available: info.is_available,
+			state: detection_state(info.state),
+			configured: info.configured,
+			surfaces: info
+				.surfaces
+				.into_iter()
+				.map(|surface| AgentSurfaceAvailabilityDto {
+					id: surface.surface_id.to_string(),
+					kind: surface_kind(surface.kind),
+					state: detection_state(surface.state),
+					configured: surface.configured,
+					evidence: surface
+						.evidence
+						.into_iter()
+						.map(|entry| DetectionEvidenceDto {
+							kind: match entry.kind {
+								DetectionProbeKind::Command => {
+									DetectionProbeKindDto::Command
+								}
+								DetectionProbeKind::Path => {
+									DetectionProbeKindDto::Path
+								}
+							},
+							target: entry.target,
+							result: match entry.result {
+								ProbeResult::Detected => {
+									DetectionResultDto::Detected
+								}
+								ProbeResult::Absent => {
+									DetectionResultDto::Absent
+								}
+								ProbeResult::Error => DetectionResultDto::Error,
+							},
+							detail: entry.detail,
+						})
+						.collect(),
+					configuration: surface
+						.configuration
+						.into_iter()
+						.map(|entry| ConfigurationEvidenceDto {
+							path: entry.path,
+							exists: entry.exists,
+						})
+						.collect(),
+				})
+				.collect(),
 		})
 		.collect();
 
@@ -199,5 +292,25 @@ mod tests {
 			.project_read
 			.iter()
 			.any(|path| path == ".agents/skills"));
+	}
+
+	#[test]
+	fn availability_keeps_detection_configuration_and_surfaces_separate() {
+		let agents = check_availability(ApiAuth).into_inner();
+		let cursor = agents
+			.into_iter()
+			.find(|agent| agent.id == "cursor")
+			.expect("Cursor availability should be listed");
+
+		assert!(!cursor.surfaces.is_empty());
+		assert!(cursor.surfaces.iter().any(|surface| surface.id == "cli"));
+		assert!(cursor.surfaces.iter().any(|surface| surface.id == "ide"));
+		assert!(matches!(
+			cursor.state,
+			DetectionStateDto::Detected
+				| DetectionStateDto::NotDetected
+				| DetectionStateDto::Unknown
+				| DetectionStateDto::Error
+		));
 	}
 }

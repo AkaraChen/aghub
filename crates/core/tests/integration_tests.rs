@@ -61,6 +61,7 @@ fn create_test_skill(name: &str) -> Skill {
 		source_path: None,
 		canonical_path: None,
 		config_source: None,
+		origin: None,
 	}
 }
 
@@ -267,6 +268,7 @@ fn test_config_round_trip_preserves_enabled_state() {
 		transport: McpTransport::stdio("echo", vec!["test".to_string()]),
 		timeout: None,
 		config_source: None,
+		origin: None,
 	};
 	let disabled_mcp = McpServer {
 		name: "disabled-mcp".to_string(),
@@ -275,6 +277,7 @@ fn test_config_round_trip_preserves_enabled_state() {
 		transport: McpTransport::stdio("echo", vec!["test".to_string()]),
 		timeout: None,
 		config_source: None,
+		origin: None,
 	};
 
 	manager.add_mcp(enabled_mcp).unwrap();
@@ -430,6 +433,7 @@ fn test_mcp_with_env_vars() {
 		},
 		timeout: None,
 		config_source: None,
+		origin: None,
 	};
 
 	manager.add_mcp(mcp).unwrap();
@@ -776,7 +780,7 @@ fn test_zed_mcp_uses_context_servers_key() {
 }
 
 #[test]
-fn test_copilot_mcp_uses_servers_key() {
+fn test_copilot_mcp_uses_current_cli_dialect() {
 	let test = TestConfig::new(AgentType::Copilot).unwrap();
 	let mut manager = test.create_manager();
 	manager.load().unwrap();
@@ -785,7 +789,8 @@ fn test_copilot_mcp_uses_servers_key() {
 	manager.add_mcp(mcp).unwrap();
 
 	let content = test.read_config().unwrap();
-	assert!(content.contains("\"servers\""));
+	let json: serde_json::Value = serde_json::from_str(&content).unwrap();
+	assert_eq!(json["mcpServers"]["copilot-mcp"]["type"], "local");
 
 	manager.load().unwrap();
 	let config = manager.config().unwrap();

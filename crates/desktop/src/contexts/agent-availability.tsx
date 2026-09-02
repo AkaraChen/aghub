@@ -5,6 +5,8 @@ import type { AgentAvailabilityDto, AgentInfo } from "../generated/dto";
 export interface AvailableAgent extends AgentInfo {
 	availability: AgentAvailabilityDto;
 	isDisabled: boolean;
+	isDetected: boolean;
+	isConfigurable: boolean;
 	isUsable: boolean;
 }
 

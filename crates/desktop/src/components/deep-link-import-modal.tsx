@@ -120,7 +120,7 @@ export function DeepLinkImportModal({
 		if (intent.kind === "skill-market-install") {
 			return availableAgents.filter(
 				(agent) =>
-					agent.isUsable &&
+					agent.isConfigurable &&
 					supportsIndividualSkillTarget(
 						agent,
 						installToProject ? "project" : "global",
@@ -129,7 +129,7 @@ export function DeepLinkImportModal({
 		}
 
 		return availableAgents.filter(
-			(agent) => agent.isUsable && supportsMcp(agent),
+			(agent) => agent.isConfigurable && supportsMcp(agent),
 		);
 	}, [availableAgents, installToProject, intent]);
 
@@ -137,9 +137,8 @@ export function DeepLinkImportModal({
 		if (intent?.kind === "skill-market-install") {
 			return new Set(["universal"]);
 		}
-		return compatibleAgents[0]
-			? new Set([compatibleAgents[0].id])
-			: new Set();
+		const detected = compatibleAgents.find((agent) => agent.isUsable);
+		return detected ? new Set([detected.id]) : new Set();
 	}, [compatibleAgents, intent]);
 
 	const selectedAgents = selectedAgentOverride ?? defaultSelectedAgents;

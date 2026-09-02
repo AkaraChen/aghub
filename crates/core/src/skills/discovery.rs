@@ -1,4 +1,4 @@
-use crate::models::Skill;
+use crate::models::{ResourceOrigin, Skill};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -150,6 +150,49 @@ pub fn load_skill_locations_from_dirs_with_options(
 	options: SkillDiscoveryOptions,
 ) -> Vec<Skill> {
 	SkillLocationCache::new(options).load(dirs)
+}
+
+pub fn assign_skill_origins(
+	skills: &mut [Skill],
+	product_id: &str,
+	sources: &[aghub_agents::SkillReadSource],
+) {
+	for skill in skills {
+		let Some(source_path) = skill.source_path.as_deref() else {
+			continue;
+		};
+		let physical_path = expand_home_path(source_path);
+		let Some(source) = sources
+			.iter()
+			.find(|source| physical_path.starts_with(&source.root))
+		else {
+			continue;
+		};
+		skill.config_source = Some(source.scope);
+		skill.origin = Some(ResourceOrigin {
+			product_id: product_id.to_string(),
+			surface_ids: source
+				.surface_ids
+				.iter()
+				.map(|id| (*id).to_string())
+				.collect(),
+			scope: source.scope,
+			source_kind: source.source_kind,
+			physical_location: Some(source_path.to_string()),
+			precedence: source.precedence,
+			write_policy: source.write_policy,
+			runtime_visibility: source.runtime_visibility,
+			runtime_visibility_evidence: Some(
+				source.runtime_visibility_evidence.to_string(),
+			),
+		});
+	}
+}
+
+fn expand_home_path(path: &str) -> PathBuf {
+	path.strip_prefix("~/")
+		.and_then(|relative| dirs::home_dir().map(|home| home.join(relative)))
+		.unwrap_or_else(|| PathBuf::from(path))
 }
 
 fn skill_location_identity(skill: &Skill) -> Option<PathBuf> {

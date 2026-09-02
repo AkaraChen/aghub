@@ -29,6 +29,13 @@ fn global_rule_paths() -> Vec<std::path::PathBuf> {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "amp",
 	display_name: "Amp",
+	surfaces: &[AgentSurface::cli(
+		"cli",
+		&["amp"],
+		&[global_data_dir],
+		&["--version"],
+	)],
+	precedence: ResourcePrecedence::uniform(ScopePrecedence::ProjectThenGlobal),
 	mcp_parse_config: Some(mcp_strategy::parse_json_map_nested_amp_mcp_servers),
 	mcp_serialize_config: Some(
 		mcp_strategy::serialize_json_map_nested_amp_mcp_servers,
@@ -37,7 +44,6 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	save_mcps,
 	mcp_global_path: Some(mcp_global_path),
 	mcp_project_path: Some(mcp_project_path),
-	global_data_dir,
 	capabilities: Capabilities {
 		skills: SkillCapabilities {
 			scopes: ScopeSupport {
@@ -68,15 +74,17 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	global_skill_paths: Some(GlobalSkillPaths {
 		read: global_skills_paths,
 		write: global_skill_write_path,
+		classify: None,
 	}),
 	project_skill_paths: Some(ProjectSkillPaths {
 		read: project_skills_paths,
 		write: project_skill_write_path,
+		classify: None,
 	}),
+	global_sub_agent_paths: None,
+	project_sub_agent_paths: None,
 	load_sub_agents: load_sub_agents_noop,
 	save_sub_agents: save_sub_agents_noop,
-	cli_name: "amp",
-	validate_args: &["--version"],
 	project_markers: &[".amp"],
 	skills_cli_name: Some("amp"),
 	rule_paths: Some(RulePaths {

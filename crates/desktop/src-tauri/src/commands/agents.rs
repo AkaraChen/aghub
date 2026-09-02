@@ -6,15 +6,18 @@ use aghub_core::registry;
 /// Resolve an agent's global config directory as an absolute, OS-correct path
 /// for the desktop "open config folder" action.
 ///
-/// The agent descriptor's `global_data_dir` (built on `dirs::home_dir()`) is the
-/// single source of truth, so platform conventions live in one place on the
-/// backend rather than being reconstructed in the renderer. Returns `None` for
-/// an unknown agent id or when no home directory is available, so the caller
-/// hides the button.
+/// Surface configuration paths are the source of truth, so platform
+/// conventions live in one place on the backend rather than being
+/// reconstructed in the renderer. Returns `None` for an unknown agent id or
+/// when no local surface publishes a configuration path.
 #[tauri::command]
 pub fn agent_config_dir(agent_id: String) -> Option<String> {
 	let agent_type = AgentType::from_str(&agent_id).ok()?;
-	let dir = (registry::get(agent_type).global_data_dir)()?;
+	let dir = registry::get(agent_type)
+		.surfaces
+		.iter()
+		.flat_map(|surface| surface.configuration_paths)
+		.find_map(|resolve| resolve())?;
 	Some(dir.to_string_lossy().into_owned())
 }
 

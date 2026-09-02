@@ -22,10 +22,12 @@ pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 pub use aghub_agents::{descriptor, errors, format, models};
 pub use aghub_agents::{
-	AgentConfig, AgentDescriptor, AgentType, Capabilities, ConfigError,
-	ConfigSource, LoadMcpsFn, LoadSubAgentsFn, McpParseFn, McpSerializeFn,
-	McpServer, McpTransport, ResourceScope, Result, SaveMcpsFn,
-	SaveSubAgentsFn, Skill, SkillDiscovery, SubAgent,
+	AgentConfig, AgentDescriptor, AgentSurface, AgentSurfaceKind, AgentType,
+	Capabilities, ConfigError, ConfigSource, LoadMcpsFn, LoadSubAgentsFn,
+	McpParseFn, McpSerializeFn, McpServer, McpTransport, ResourceOrigin,
+	ResourcePrecedence, ResourceScope, ResourceSourceKind, ResourceWritePolicy,
+	Result, RuntimeVisibility, SaveMcpsFn, SaveSubAgentsFn, ScopePrecedence,
+	Skill, SkillDiscovery, SubAgent,
 };
 
 #[cfg(feature = "testing")]
@@ -84,6 +86,7 @@ pub fn convert_skill(skill_pkg: skill::Skill) -> models::Skill {
 		source_path,
 		canonical_path: None,
 		config_source: None,
+		origin: None,
 	}
 }
 

@@ -1,11 +1,9 @@
 //! Agent descriptor regression tests.
 //!
-//! These tests hard-code the expected behavior from main branch to prevent
-//! regression when refactoring agent descriptor files.
-//!
-//! Expected values are extracted from main branch actual descriptor definitions.
+//! These tests lock the registered product set and documented path and
+//! capability contracts while descriptor files change.
 
-use aghub_agents::{AgentDescriptor, AgentType};
+use aghub_agents::{AgentDescriptor, AgentSurfaceKind, AgentType};
 use std::path::PathBuf;
 
 /// Helper to get home directory for path assertions
@@ -44,50 +42,359 @@ fn all_descriptors() -> Vec<(AgentType, &'static AgentDescriptor)> {
 		(AgentType::KiloCode, &agents::kilocode::DESCRIPTOR),
 		(AgentType::Amp, &agents::amp::DESCRIPTOR),
 		(AgentType::Warp, &agents::warp::DESCRIPTOR),
+		(AgentType::Factory, &agents::factory::DESCRIPTOR),
+		(AgentType::Adal, &agents::adal::DESCRIPTOR),
+		(AgentType::Aider, &agents::aider::DESCRIPTOR),
+		(AgentType::CodeBuddy, &agents::codebuddy::DESCRIPTOR),
+		(AgentType::CodeWhale, &agents::codewhale::DESCRIPTOR),
+		(AgentType::CommandCode, &agents::command_code::DESCRIPTOR),
+		(AgentType::Continue, &agents::continue_agent::DESCRIPTOR),
+		(AgentType::QwenPaw, &agents::qwenpaw::DESCRIPTOR),
+		(AgentType::Crush, &agents::crush::DESCRIPTOR),
+		(AgentType::DuMate, &agents::dumate::DESCRIPTOR),
+		(AgentType::Goose, &agents::goose::DESCRIPTOR),
+		(AgentType::Hermes, &agents::hermes::DESCRIPTOR),
+		(AgentType::IFlow, &agents::iflow::DESCRIPTOR),
+		(AgentType::Junie, &agents::junie::DESCRIPTOR),
+		(AgentType::Kode, &agents::kode::DESCRIPTOR),
+		(AgentType::McpJam, &agents::mcpjam::DESCRIPTOR),
+		(AgentType::Xum, &agents::xum::DESCRIPTOR),
+		(AgentType::Neovate, &agents::neovate::DESCRIPTOR),
+		(AgentType::OpenHands, &agents::openhands::DESCRIPTOR),
+		(AgentType::Pochi, &agents::pochi::DESCRIPTOR),
+		(AgentType::Qoder, &agents::qoder::DESCRIPTOR),
+		(AgentType::QoderWork, &agents::qoderwork::DESCRIPTOR),
+		(AgentType::QwenCode, &agents::qwen_code::DESCRIPTOR),
+		(AgentType::WorkBuddy, &agents::workbuddy::DESCRIPTOR),
+		(AgentType::Zencoder, &agents::zencoder::DESCRIPTOR),
 	]
 }
 
-// =============================================================================
-// CLI Name Tests (from main branch actual values)
-// =============================================================================
-
 #[test]
-fn test_cli_names() {
-	// Expected values from main branch descriptor files
-	let expected: [(AgentType, &str); 22] = [
-		(AgentType::Claude, "claude"),
-		(AgentType::Codex, "codex"),
-		(AgentType::Openclaw, "openclaw"),
-		(AgentType::OpenCode, "opencode"),
-		(AgentType::Gemini, "gemini"),
-		(AgentType::Cline, "cline"),
-		(AgentType::Copilot, "code"),
-		(AgentType::Cursor, "cursor"),
-		(AgentType::Antigravity, "antigravity"),
-		(AgentType::Kiro, "kiro"),
-		(AgentType::Windsurf, "windsurf"),
-		(AgentType::Trae, "trae"),
-		(AgentType::Zed, "zed"),
-		(AgentType::JetBrainsAi, "jetbrains"),
-		(AgentType::RooCode, "roocode"),
-		(AgentType::Kimi, "kimi"),
-		(AgentType::Mistral, "mistral"),
-		(AgentType::Pi, "pi"),
-		(AgentType::AugmentCode, "augmentcode"),
-		(AgentType::KiloCode, "kilocode"), // main branch: "kilocode"
-		(AgentType::Amp, "amp"),
-		(AgentType::Warp, "warp"),
+fn agent_catalog_keeps_the_issue_446_product_set() {
+	let actual = AgentType::ALL
+		.iter()
+		.map(AgentType::as_str)
+		.collect::<Vec<_>>();
+	let expected = [
+		"cursor",
+		"grok",
+		"deepseek-harness",
+		"windsurf",
+		"copilot",
+		"claude",
+		"roocode",
+		"cline",
+		"gemini",
+		"codex",
+		"antigravity",
+		"openclaw",
+		"opencode",
+		"augmentcode",
+		"kilocode",
+		"amp",
+		"zed",
+		"kiro",
+		"warp",
+		"trae",
+		"factory",
+		"kimi",
+		"mistral",
+		"pi",
+		"jetbrains-ai",
+		"adal",
+		"aider",
+		"codebuddy",
+		"codewhale",
+		"command-code",
+		"continue",
+		"qwenpaw",
+		"crush",
+		"dumate",
+		"goose",
+		"hermes",
+		"iflow",
+		"junie",
+		"kode",
+		"mcpjam",
+		"xum",
+		"neovate",
+		"openhands",
+		"pochi",
+		"qoder",
+		"qoderwork",
+		"qwen-code",
+		"workbuddy",
+		"zencoder",
 	];
 
-	for (agent_type, desc) in all_descriptors() {
-		if let Some((_, name)) = expected.iter().find(|(t, _)| *t == agent_type)
-		{
-			assert_eq!(
-				desc.cli_name, *name,
-				"cli_name mismatch for {:?}",
-				agent_type
+	assert_eq!(actual, expected);
+}
+
+#[test]
+fn qoder_uses_resource_specific_precedence() {
+	use aghub_agents::agents;
+	use aghub_agents::ScopePrecedence;
+
+	let precedence = agents::qoder::DESCRIPTOR.precedence;
+	assert_eq!(precedence.skills, ScopePrecedence::GlobalThenProject);
+	assert_eq!(precedence.mcp, ScopePrecedence::ProjectThenGlobal);
+	assert_eq!(precedence.sub_agents, ScopePrecedence::ProjectThenGlobal);
+}
+
+#[test]
+fn copilot_cli_sources_match_the_current_contract() {
+	use aghub_agents::agents;
+
+	let descriptor = &agents::copilot::DESCRIPTOR;
+	assert!(descriptor.surfaces.iter().any(|surface| {
+		surface.kind == AgentSurfaceKind::Cli
+			&& surface.cli_names == ["copilot"]
+	}));
+	assert_eq!(
+		descriptor.mcp_global_path.unwrap()(),
+		Some(home().join(".copilot/mcp-config.json"))
+	);
+	assert_eq!(
+		descriptor.project_skill_read_paths(&PathBuf::from("/project")),
+		vec![
+			PathBuf::from("/project/.github/skills"),
+			PathBuf::from("/project/.claude/skills"),
+			PathBuf::from("/project/.agents/skills"),
+		]
+	);
+}
+
+#[test]
+fn copilot_reads_both_documented_project_mcp_sources() {
+	use aghub_agents::agents;
+	use aghub_agents::{
+		ResourceScope, ResourceSourceKind, ResourceWritePolicy,
+	};
+
+	let project = tempfile::tempdir().unwrap();
+	std::fs::create_dir_all(project.path().join(".github")).unwrap();
+	std::fs::write(
+		project.path().join(".mcp.json"),
+		r#"{"workspace":{"type":"local","command":"workspace"}}"#,
+	)
+	.unwrap();
+	std::fs::write(
+		project.path().join(".github/mcp.json"),
+		r#"{"mcpServers":{"repository":{"type":"local","command":"repository"}}}"#,
+	)
+	.unwrap();
+
+	let mcps = (agents::copilot::DESCRIPTOR.load_mcps)(
+		Some(project.path()),
+		ResourceScope::ProjectOnly,
+	)
+	.unwrap();
+
+	assert_eq!(
+		mcps.iter().map(|mcp| mcp.name.as_str()).collect::<Vec<_>>(),
+		["workspace", "repository"]
+	);
+	let workspace = mcps[0].origin.as_ref().unwrap();
+	assert_eq!(workspace.source_kind, ResourceSourceKind::Standard);
+	assert_eq!(workspace.write_policy, ResourceWritePolicy::ReadWrite);
+	let repository = mcps[1].origin.as_ref().unwrap();
+	assert_eq!(repository.source_kind, ResourceSourceKind::Native);
+	assert_eq!(repository.write_policy, ResourceWritePolicy::ReadOnly);
+}
+
+#[test]
+fn qoder_reads_project_mcp_layers_in_runtime_order() {
+	use aghub_agents::agents;
+	use aghub_agents::{ResourceScope, ResourceWritePolicy};
+
+	let project = tempfile::tempdir().unwrap();
+	std::fs::create_dir_all(project.path().join(".qoder")).unwrap();
+	for (relative, name) in [
+		(".qoder/settings.local.json", "local"),
+		(".mcp.json", "workspace"),
+		(".qoder/settings.json", "project"),
+	] {
+		std::fs::write(
+			project.path().join(relative),
+			format!(r#"{{"mcpServers":{{"{name}":{{"command":"{name}"}}}}}}"#),
+		)
+		.unwrap();
+	}
+
+	let mcps = (agents::qoder::DESCRIPTOR.load_mcps)(
+		Some(project.path()),
+		ResourceScope::ProjectOnly,
+	)
+	.unwrap();
+
+	assert_eq!(
+		mcps.iter().map(|mcp| mcp.name.as_str()).collect::<Vec<_>>(),
+		["local", "workspace", "project"]
+	);
+	assert_eq!(
+		mcps[0].origin.as_ref().unwrap().write_policy,
+		ResourceWritePolicy::ReadOnly
+	);
+	assert_eq!(
+		mcps[2].origin.as_ref().unwrap().write_policy,
+		ResourceWritePolicy::ReadWrite
+	);
+}
+
+#[test]
+fn new_agent_project_write_targets_match_their_native_contracts() {
+	use aghub_agents::agents;
+	use aghub_agents::ResourceScope;
+
+	let root = PathBuf::from("/project");
+	let cases = [
+		(&agents::adal::DESCRIPTOR, Some(".adal/skills")),
+		(&agents::aider::DESCRIPTOR, None),
+		(&agents::codebuddy::DESCRIPTOR, Some(".codebuddy/skills")),
+		(&agents::codewhale::DESCRIPTOR, Some(".codewhale/skills")),
+		(
+			&agents::command_code::DESCRIPTOR,
+			Some(".commandcode/skills"),
+		),
+		(&agents::continue_agent::DESCRIPTOR, None),
+		(&agents::qwenpaw::DESCRIPTOR, None),
+		(&agents::crush::DESCRIPTOR, Some(".crush/skills")),
+		(&agents::dumate::DESCRIPTOR, None),
+		(&agents::goose::DESCRIPTOR, Some(".agents/skills")),
+		(&agents::hermes::DESCRIPTOR, None),
+		(&agents::iflow::DESCRIPTOR, Some(".iflow/skills")),
+		(&agents::junie::DESCRIPTOR, Some(".junie/skills")),
+		(&agents::kode::DESCRIPTOR, Some(".kode/skills")),
+		(&agents::mcpjam::DESCRIPTOR, Some(".mcpjam/skills")),
+		(&agents::xum::DESCRIPTOR, Some(".xum/skills")),
+		(&agents::neovate::DESCRIPTOR, Some(".neovate/skills")),
+		(&agents::openhands::DESCRIPTOR, Some(".agents/skills")),
+		(&agents::pochi::DESCRIPTOR, Some(".pochi/skills")),
+		(&agents::qoder::DESCRIPTOR, Some(".qoder/skills")),
+		(&agents::qoderwork::DESCRIPTOR, None),
+		(&agents::qwen_code::DESCRIPTOR, Some(".qwen/skills")),
+		(&agents::workbuddy::DESCRIPTOR, None),
+		(&agents::zencoder::DESCRIPTOR, Some(".agents/skills")),
+	];
+
+	for (descriptor, relative) in cases {
+		assert_eq!(
+			descriptor
+				.skill_write_path(Some(&root), ResourceScope::ProjectOnly,),
+			relative.map(|path| root.join(path)),
+			"{}",
+			descriptor.id
+		);
+	}
+}
+
+#[test]
+fn mixed_resource_agents_expose_only_implemented_families() {
+	use aghub_agents::agents;
+
+	let codebuddy = &agents::codebuddy::DESCRIPTOR.capabilities;
+	assert!(codebuddy.skills.scopes.global);
+	assert!(codebuddy.mcp.scopes.project);
+	assert!(codebuddy.sub_agents.scopes.project);
+	assert!(agents::codebuddy::DESCRIPTOR.rule_paths.is_some());
+
+	let command_code = &agents::command_code::DESCRIPTOR.capabilities;
+	assert!(command_code.skills.scopes.project);
+	assert!(command_code.mcp.scopes.global);
+	assert!(!command_code.mcp.scopes.project);
+	assert!(command_code.sub_agents.scopes.project);
+
+	let qoder = &agents::qoder::DESCRIPTOR.capabilities;
+	assert!(qoder.skills.scopes.project);
+	assert!(qoder.mcp.scopes.project);
+	assert!(qoder.sub_agents.scopes.project);
+	assert!(agents::qoder::DESCRIPTOR.rule_paths.is_some());
+
+	let pochi = &agents::pochi::DESCRIPTOR.capabilities;
+	assert!(pochi.skills.scopes.project);
+	assert!(pochi.sub_agents.scopes.project);
+	assert!(!pochi.mcp.scopes.project);
+
+	let workbuddy = &agents::workbuddy::DESCRIPTOR.capabilities;
+	assert!(!workbuddy.skills.scopes.project);
+	assert!(workbuddy.mcp.scopes.project);
+	assert!(!workbuddy.sub_agents.scopes.project);
+}
+
+#[test]
+fn read_only_and_audit_sources_are_not_install_targets() {
+	use aghub_agents::agents;
+	use aghub_agents::{ResourceScope, ResourceWritePolicy, RuntimeVisibility};
+
+	let qwenpaw = agents::qwenpaw::DESCRIPTOR
+		.skill_read_sources(None, ResourceScope::GlobalOnly);
+	assert!(!qwenpaw.is_empty());
+	assert!(qwenpaw
+		.iter()
+		.all(|source| source.write_policy == ResourceWritePolicy::ReadOnly));
+	assert!(qwenpaw
+		.iter()
+		.all(|source| source.runtime_visibility
+			== RuntimeVisibility::Conditional));
+
+	let codewhale = agents::codewhale::DESCRIPTOR.skill_read_sources(
+		Some(&PathBuf::from("/project")),
+		ResourceScope::ProjectOnly,
+	);
+	let codex = codewhale
+		.iter()
+		.find(|source| source.root.ends_with(".codex/skills"))
+		.unwrap();
+	assert_eq!(codex.write_policy, ResourceWritePolicy::ReadOnly);
+	assert_eq!(codex.runtime_visibility, RuntimeVisibility::AuditOnly);
+}
+
+fn configuration_paths(descriptor: &AgentDescriptor) -> Vec<PathBuf> {
+	let mut paths = descriptor
+		.surfaces
+		.iter()
+		.flat_map(|surface| surface.configuration_paths)
+		.filter_map(|resolve| resolve())
+		.collect::<Vec<_>>();
+	paths.sort();
+	paths.dedup();
+	paths
+}
+
+#[test]
+fn every_descriptor_has_unique_surface_ids() {
+	for (_, descriptor) in all_descriptors() {
+		assert!(!descriptor.surfaces.is_empty(), "{}", descriptor.id);
+		for (index, surface) in descriptor.surfaces.iter().enumerate() {
+			assert!(
+				descriptor.surfaces[..index]
+					.iter()
+					.all(|other| other.id != surface.id),
+				"duplicate surface '{}' for {}",
+				surface.id,
+				descriptor.id
 			);
 		}
+	}
+}
+
+#[test]
+fn ide_only_products_do_not_borrow_unrelated_cli_commands() {
+	use aghub_agents::agents;
+
+	for descriptor in [
+		&agents::jetbrains_ai::DESCRIPTOR,
+		&agents::roocode::DESCRIPTOR,
+	] {
+		assert!(descriptor
+			.surfaces
+			.iter()
+			.all(|surface| surface.kind == AgentSurfaceKind::Ide));
+		assert!(descriptor
+			.surfaces
+			.iter()
+			.all(|surface| surface.cli_names.is_empty()));
 	}
 }
 
@@ -190,12 +497,12 @@ fn test_project_markers() {
 		(AgentType::OpenCode, &[".opencode"]),
 		(AgentType::Gemini, &[".gemini"]),
 		(AgentType::Cline, &[".cline"]),
-		(AgentType::Copilot, &[".vscode"]),
+		(AgentType::Copilot, &[".github", ".mcp.json"]),
 		(AgentType::Cursor, &[".cursor"]),
 		(AgentType::Antigravity, &[".gemini/antigravity"]),
 		(AgentType::Kiro, &[".kiro"]),
 		(AgentType::Windsurf, &[".windsurf"]),
-		(AgentType::Trae, &[".trae"]),
+		(AgentType::Trae, &[".trae", ".traecli"]),
 		(AgentType::Zed, &[".zed"]),
 		(AgentType::JetBrainsAi, &[]),
 		(AgentType::RooCode, &[".roo"]),
@@ -240,7 +547,7 @@ fn test_mcp_global_paths() {
 			AgentType::Cline,
 			Some(".cline/data/settings/cline_mcp_settings.json"),
 		),
-		(AgentType::Copilot, Some(".vscode/mcp.json")),
+		(AgentType::Copilot, Some(".copilot/mcp-config.json")),
 		(AgentType::Cursor, Some(".cursor/mcp.json")),
 		(
 			AgentType::Antigravity,
@@ -310,7 +617,7 @@ fn test_mcp_project_paths() {
 		(AgentType::OpenCode, Some(".opencode/settings.json")),
 		(AgentType::Gemini, Some(".gemini/settings.json")),
 		(AgentType::Cline, Some(".cline/mcp.json")),
-		(AgentType::Copilot, Some(".vscode/mcp.json")),
+		(AgentType::Copilot, Some(".mcp.json")),
 		(AgentType::Cursor, Some(".cursor/mcp.json")),
 		(
 			AgentType::Antigravity,
@@ -367,11 +674,11 @@ fn test_mcp_project_paths() {
 }
 
 // =============================================================================
-// Global Data Dir Tests (from main branch actual values)
+// Configuration root tests (from main branch actual values)
 // =============================================================================
 
 #[test]
-fn test_global_data_dirs() {
+fn test_configuration_roots() {
 	let expected: [(AgentType, Option<&str>); 20] = [
 		(AgentType::Claude, Some(".claude")),
 		(AgentType::Codex, Some(".codex")),
@@ -405,19 +712,17 @@ fn test_global_data_dirs() {
 
 		match expected_dir {
 			Some(Some(path)) => {
-				let actual = (desc.global_data_dir)();
-				assert_eq!(
-					actual,
-					Some(home().join(path)),
-					"global_data_dir mismatch for {:?}",
+				let actual = configuration_paths(desc);
+				assert!(
+					actual.contains(&home().join(path)),
+					"configuration root mismatch for {:?}",
 					agent_type
 				);
 			}
 			Some(None) => {
-				assert_eq!(
-					(desc.global_data_dir)(),
-					None,
-					"global_data_dir should be None for {:?}",
+				assert!(
+					configuration_paths(desc).is_empty(),
+					"configuration root should be absent for {:?}",
 					agent_type
 				);
 			}
@@ -428,16 +733,14 @@ fn test_global_data_dirs() {
 	// Trae and JetBrains AI store data in the OS config dir (Application
 	// Support on macOS, .config on Linux), not a home dotfolder.
 	use aghub_agents::agents;
-	assert_eq!(
-		(agents::trae::DESCRIPTOR.global_data_dir)(),
-		dirs::config_dir().map(|c| c.join("Trae")),
-		"trae global_data_dir should be the OS config dir"
-	);
-	assert_eq!(
-		(agents::jetbrains_ai::DESCRIPTOR.global_data_dir)(),
-		dirs::config_dir().map(|c| c.join("JetBrains")),
-		"jetbrains-ai global_data_dir should be the OS config dir"
-	);
+	let trae = configuration_paths(&agents::trae::DESCRIPTOR);
+	assert!(dirs::config_dir()
+		.map(|dir| trae.contains(&dir.join("Trae")))
+		.unwrap_or(false));
+	let jetbrains = configuration_paths(&agents::jetbrains_ai::DESCRIPTOR);
+	assert!(dirs::config_dir()
+		.map(|dir| jetbrains.contains(&dir.join("JetBrains")))
+		.unwrap_or(false));
 }
 
 // =============================================================================
@@ -620,8 +923,8 @@ fn test_skills_capabilities_scopes_global() {
 		(AgentType::Antigravity, true),
 		(AgentType::Kiro, true),
 		(AgentType::Windsurf, true),
-		(AgentType::Trae, false), // global skills are not attested
-		(AgentType::Zed, false),  // Zed has no global skills
+		(AgentType::Trae, true),
+		(AgentType::Zed, false), // Zed has no global skills
 		(AgentType::JetBrainsAi, false),
 		(AgentType::RooCode, true),
 		(AgentType::Kimi, true),
@@ -736,8 +1039,8 @@ fn test_sub_agent_capabilities_scopes_global() {
 		(AgentType::OpenCode, true),
 		(AgentType::Gemini, false),
 		(AgentType::Cline, false),
-		(AgentType::Copilot, false),
-		(AgentType::Cursor, false),
+		(AgentType::Copilot, true),
+		(AgentType::Cursor, true),
 		(AgentType::Antigravity, false),
 		(AgentType::Kiro, false),
 		(AgentType::Windsurf, false),
@@ -775,8 +1078,8 @@ fn test_sub_agent_capabilities_scopes_project() {
 		(AgentType::OpenCode, true),
 		(AgentType::Gemini, false),
 		(AgentType::Cline, false),
-		(AgentType::Copilot, false),
-		(AgentType::Cursor, false),
+		(AgentType::Copilot, true),
+		(AgentType::Cursor, true),
 		(AgentType::Antigravity, false),
 		(AgentType::Kiro, false),
 		(AgentType::Windsurf, false),
@@ -852,7 +1155,10 @@ fn test_global_skill_paths() {
 		),
 		(AgentType::Kiro, Some(&[".kiro/skills"])),
 		(AgentType::Windsurf, Some(&[".codeium/windsurf/skills"])),
-		(AgentType::Trae, None),
+		(
+			AgentType::Trae,
+			Some(&[".traecli/skills", ".trae-cn/skills"]),
+		),
 		(AgentType::Zed, None), // Zed has no skills
 		(AgentType::JetBrainsAi, None),
 		(AgentType::RooCode, Some(&[".roo/skills"])),
@@ -949,7 +1255,10 @@ fn test_project_skill_paths() {
 		),
 		(AgentType::Gemini, Some(&[".agents/skills"])),
 		(AgentType::Cline, Some(&[".agents/skills"])),
-		(AgentType::Copilot, Some(&[".agents/skills"])),
+		(
+			AgentType::Copilot,
+			Some(&[".github/skills", ".claude/skills", ".agents/skills"]),
+		),
 		(
 			AgentType::Cursor,
 			Some(&[
@@ -962,7 +1271,10 @@ fn test_project_skill_paths() {
 		(AgentType::Antigravity, Some(&[".agents/skills"])),
 		(AgentType::Kiro, Some(&[".kiro/skills"])),
 		(AgentType::Windsurf, Some(&[".windsurf/skills"])),
-		(AgentType::Trae, Some(&[".trae/skills"])),
+		(
+			AgentType::Trae,
+			Some(&[".traecli/skills", ".trae/skills", ".agents/skills"]),
+		),
 		(AgentType::Zed, None), // Zed has no skills
 		(AgentType::JetBrainsAi, None),
 		(AgentType::RooCode, Some(&[".roo/skills"])),
@@ -1073,8 +1385,8 @@ fn grok_descriptor_matches_standard_client_contract() {
 	let root = PathBuf::from("/project");
 	assert_eq!(descriptor.id, "grok");
 	assert_eq!(descriptor.display_name, "Grok Build");
-	assert_eq!(descriptor.cli_name, "grok");
-	assert_eq!(descriptor.validate_args, &["version"]);
+	assert_eq!(descriptor.surfaces[0].cli_names, &["grok"]);
+	assert_eq!(descriptor.surfaces[0].validate_args, &["version"]);
 	assert_eq!(descriptor.skills_cli_name, Some("grok"));
 	assert_eq!(descriptor.project_markers, &[".grok"]);
 	assert_eq!(
@@ -1104,8 +1416,8 @@ fn deepseek_harness_descriptor_matches_skill_contract() {
 	let root = PathBuf::from("/project");
 	assert_eq!(descriptor.id, "deepseek-harness");
 	assert_eq!(descriptor.display_name, "DeepSeek Harness");
-	assert_eq!(descriptor.cli_name, "dsh");
-	assert_eq!(descriptor.validate_args, &["--help"]);
+	assert_eq!(descriptor.surfaces[0].cli_names, &["dsh"]);
+	assert_eq!(descriptor.surfaces[0].validate_args, &["--help"]);
 	assert_eq!(descriptor.skills_cli_name, None);
 	assert_eq!(descriptor.project_markers, &[".dsh"]);
 	assert_eq!(

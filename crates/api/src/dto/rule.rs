@@ -2,7 +2,7 @@ use aghub_core::rules::{self, RuleFile};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::dto::common::ConfigSource;
+use crate::dto::common::{ConfigSource, ResourceOriginDto};
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
@@ -33,6 +33,7 @@ pub struct RuleFileResponse {
 	pub path: String,
 	pub source: ConfigSource,
 	pub exists: bool,
+	pub origin: ResourceOriginDto,
 }
 
 impl From<RuleFile> for RuleFileResponse {
@@ -42,6 +43,7 @@ impl From<RuleFile> for RuleFileResponse {
 			path: rules::display_path(&file.path),
 			source: file.source.into(),
 			exists: file.exists,
+			origin: (&file.origin).into(),
 		}
 	}
 }

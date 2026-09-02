@@ -86,7 +86,7 @@ export default function MCPServersPage() {
 	const hasMcpCapableAgents = useMemo(
 		() =>
 			availableAgents.some(
-				(agent) => agent.isUsable && supportsMcp(agent),
+				(agent) => agent.isConfigurable && supportsMcp(agent),
 			),
 		[availableAgents],
 	);

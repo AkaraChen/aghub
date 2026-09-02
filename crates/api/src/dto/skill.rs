@@ -2,7 +2,7 @@ use aghub_core::models::Skill;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::dto::common::ConfigSource;
+use crate::dto::common::{ConfigSource, ResourceOriginDto};
 
 #[derive(Debug, Deserialize, TS)]
 #[ts(export)]
@@ -41,6 +41,7 @@ impl From<CreateSkillRequest> for Skill {
 			source_path: None,
 			canonical_path: None,
 			config_source: None,
+			origin: None,
 		}
 	}
 }
@@ -71,6 +72,7 @@ impl UpdateSkillRequest {
 			source_path: existing.source_path,
 			canonical_path: existing.canonical_path,
 			config_source: existing.config_source,
+			origin: existing.origin,
 		}
 	}
 }
@@ -81,6 +83,9 @@ pub struct SkillLocationResponse {
 	pub source_path: String,
 	pub is_symlink: bool,
 	pub source: ConfigSource,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub origin: Option<ResourceOriginDto>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub provider: Option<SkillProviderResponse>,
@@ -180,6 +185,9 @@ pub struct SkillResponse {
 	pub source: Option<ConfigSource>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub agent: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub origin: Option<ResourceOriginDto>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub locations: Option<Vec<SkillLocationResponse>>,
@@ -423,6 +431,7 @@ impl From<&Skill> for SkillResponse {
 			tools: s.tools.clone(),
 			source: s.config_source.map(Into::into),
 			agent: None,
+			origin: s.origin.as_ref().map(Into::into),
 			locations: None,
 		}
 	}

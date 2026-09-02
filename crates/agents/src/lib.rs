@@ -7,13 +7,17 @@ pub mod models;
 pub mod sub_agents;
 
 pub use descriptor::{
-	AgentDescriptor, Capabilities, GlobalSkillPaths, LoadMcpsFn,
-	LoadSubAgentsFn, McpCapabilities, McpParseFn, McpSerializeFn,
-	ProjectSkillPaths, SaveMcpsFn, SaveSubAgentsFn, ScopeSupport,
-	SkillCapabilities, SkillDiscovery, SubAgentCapabilities,
+	AgentDescriptor, AgentSurface, AgentSurfaceKind, Capabilities,
+	GlobalSkillPaths, GlobalSubAgentPaths, LoadMcpsFn, LoadSubAgentsFn,
+	McpCapabilities, McpParseFn, McpReadSource, McpSerializeFn,
+	ProjectSkillPaths, ProjectSubAgentPaths, ResourcePrecedence, SaveMcpsFn,
+	SaveSubAgentsFn, ScopePrecedence, ScopeSupport, SkillCapabilities,
+	SkillDiscovery, SkillReadSource, SkillSourceClassification,
+	SkillSourceClassifier, SubAgentCapabilities,
 };
 pub use errors::{ConfigError, Result};
 pub use models::{
 	AgentConfig, AgentType, ConfigSource, McpServer, McpTransport,
-	ResourceScope, Skill, SubAgent,
+	ResourceOrigin, ResourceScope, ResourceSourceKind, ResourceWritePolicy,
+	RuntimeVisibility, Skill, SubAgent,
 };

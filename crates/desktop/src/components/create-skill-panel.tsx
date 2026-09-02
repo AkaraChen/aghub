@@ -50,7 +50,7 @@ export function CreateSkillPanel({
 		() =>
 			availableAgents.filter(
 				(a) =>
-					a.isUsable &&
+					a.isConfigurable &&
 					supportsIndividualSkillTarget(
 						a,
 						projectPath ? "project" : "global",

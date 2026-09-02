@@ -9,6 +9,10 @@ import type {
 import { AgentAvailabilityContext } from "../contexts/agent-availability";
 import type { AgentAvailabilityDto, AgentInfo } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
+import {
+	canPrepareAgentConfiguration,
+	isAgentDetected,
+} from "../lib/agent-availability";
 import { getDisabledAgents } from "../lib/store";
 import {
 	agentAvailabilityQueryOptions,
@@ -63,18 +67,25 @@ export function AgentAvailabilityProvider({
 				) ??
 				({
 					id: agent.id,
-					has_global_directory: false,
-					has_cli: false,
-					is_available: false,
+					state: "unknown",
+					configured: false,
+					surfaces: [],
 				} as AgentAvailabilityDto);
 
 			const isDisabled = disabledAgents.has(agent.id);
-			const isUsable = availability.is_available && !isDisabled;
+			const isDetected = isAgentDetected(availability);
+			const isConfigurable = canPrepareAgentConfiguration(
+				agent,
+				isDisabled,
+			);
+			const isUsable = isDetected && !isDisabled;
 
 			return {
 				...agent,
 				availability,
 				isDisabled,
+				isDetected,
+				isConfigurable,
 				isUsable,
 			};
 		},

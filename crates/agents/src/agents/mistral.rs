@@ -15,13 +15,19 @@ define_skill_paths! {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "mistral",
 	display_name: "Mistral Le Chat",
+	surfaces: &[AgentSurface::cli(
+		"cli",
+		&["mistral"],
+		&[global_data_dir],
+		&["--version"],
+	)],
+	precedence: ResourcePrecedence::uniform(ScopePrecedence::ProjectThenGlobal),
 	mcp_parse_config: Some(mcp_strategy::PARSE_TOML),
 	mcp_serialize_config: Some(mcp_strategy::SERIALIZE_TOML),
 	load_mcps,
 	save_mcps,
 	mcp_global_path: Some(mcp_global_path),
 	mcp_project_path: Some(mcp_project_path),
-	global_data_dir,
 	capabilities: Capabilities {
 		skills: SkillCapabilities {
 			scopes: ScopeSupport {
@@ -52,15 +58,17 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	global_skill_paths: Some(GlobalSkillPaths {
 		read: global_skills_paths,
 		write: global_skill_write_path,
+		classify: None,
 	}),
 	project_skill_paths: Some(ProjectSkillPaths {
 		read: project_skills_paths,
 		write: project_skill_write_path,
+		classify: None,
 	}),
+	global_sub_agent_paths: None,
+	project_sub_agent_paths: None,
 	load_sub_agents: load_sub_agents_noop,
 	save_sub_agents: save_sub_agents_noop,
-	cli_name: "mistral",
-	validate_args: &["--version"],
 	project_markers: &[".vibe"],
 	skills_cli_name: Some("mistral-vibe"),
 	rule_paths: None,

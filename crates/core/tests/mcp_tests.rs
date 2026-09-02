@@ -24,7 +24,8 @@ use aghub_core::{
 	},
 	models::{AgentType, McpServer, McpTransport},
 	testing::{TestConfig, TestConfigBuilder},
-	AgentDescriptor, ConfigError, ResourceScope,
+	AgentDescriptor, AgentSurface, ConfigError, ConfigManager,
+	ResourcePrecedence, ResourceScope, ScopePrecedence,
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -66,13 +67,14 @@ fn no_project_path(_: &Path) -> Option<PathBuf> {
 static ADAPTER_TEST_DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "adapter-test",
 	display_name: "Adapter Test",
+	surfaces: &[AgentSurface::cli("cli", &["adapter-test"], &[no_path], &[])],
+	precedence: ResourcePrecedence::uniform(ScopePrecedence::ProjectThenGlobal),
 	mcp_parse_config: None,
 	mcp_serialize_config: None,
 	load_mcps: adapter_test_load_mcps,
 	save_mcps: adapter_test_save_mcps,
 	mcp_global_path: Some(no_path),
 	mcp_project_path: Some(no_project_path),
-	global_data_dir: no_path,
 	capabilities: Capabilities {
 		skills: SkillCapabilities {
 			scopes: ScopeSupport {
@@ -102,10 +104,10 @@ static ADAPTER_TEST_DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	global_skill_paths: None,
 	project_skill_paths: None,
+	global_sub_agent_paths: None,
+	project_sub_agent_paths: None,
 	load_sub_agents: load_sub_agents_noop,
 	save_sub_agents: save_sub_agents_noop,
-	cli_name: "adapter-test",
-	validate_args: &[],
 	project_markers: &[],
 	skills_cli_name: None,
 	rule_paths: None,
@@ -149,10 +151,9 @@ fn mcp_http(name: &str) -> McpServer {
 // ==================== Group 1: Per-agent JSON key names ====================
 // From ruler: mcp-key-per-agent.test.ts, mcp-key-gemini.test.ts
 
-/// GitHub Copilot uses "servers" key, not "mcpServers"
-/// Corresponds to ruler test: uses "servers" key for Copilot
+/// GitHub Copilot CLI uses `mcpServers` and `local` for stdio servers.
 #[test]
-fn test_copilot_mcp_uses_servers_key() {
+fn test_copilot_mcp_uses_current_cli_dialect() {
 	// Use empty initial content so no stale keys are preserved
 	let test = TestConfigBuilder::new(AgentType::Copilot)
 		.with_content("{}")
@@ -166,15 +167,8 @@ fn test_copilot_mcp_uses_servers_key() {
 	let content = test.read_config().unwrap();
 	let json: serde_json::Value = serde_json::from_str(&content).unwrap();
 
-	assert!(
-		json.get("servers").is_some(),
-		"Copilot should use 'servers' key"
-	);
-	assert!(
-		json.get("mcpServers").is_none(),
-		"Copilot should NOT use 'mcpServers' key"
-	);
-	assert!(json["servers"].get("my-server").is_some());
+	assert!(json["mcpServers"].get("my-server").is_some());
+	assert_eq!(json["mcpServers"]["my-server"]["type"], "local");
 }
 
 /// Cursor uses "mcpServers" key
@@ -444,6 +438,7 @@ fn test_opencode_stdio_env_becomes_environment() {
 		},
 		timeout: None,
 		config_source: None,
+		origin: None,
 	};
 	manager.add_mcp(mcp).unwrap();
 
@@ -483,6 +478,7 @@ fn test_opencode_timeout_preserved() {
 		},
 		timeout: None,
 		config_source: None,
+		origin: None,
 	};
 	let remote_with_timeout = McpServer {
 		name: "remote-with-timeout".to_string(),
@@ -495,6 +491,7 @@ fn test_opencode_timeout_preserved() {
 		},
 		timeout: None,
 		config_source: None,
+		origin: None,
 	};
 	manager.add_mcp(local_with_timeout).unwrap();
 	manager.add_mcp(remote_with_timeout).unwrap();
@@ -1110,6 +1107,7 @@ fn test_codex_mcp_toml_stdio_with_env() {
 		},
 		timeout: None,
 		config_source: None,
+		origin: None,
 	};
 	manager.add_mcp(mcp).unwrap();
 
@@ -1260,7 +1258,7 @@ fn test_mcp_merge_preserves_existing_servers() {
 	// Start with an existing native config that has a server
 	let test = TestConfigBuilder::new(AgentType::Copilot)
 		.with_content(
-			r#"{"servers": {"native-server": {"type": "stdio", "command": "native-cmd"}}}"#,
+			r#"{"mcpServers": {"native-server": {"type": "local", "command": "native-cmd"}}}"#,
 		)
 		.build()
 		.unwrap();
@@ -1339,7 +1337,7 @@ fn test_mcp_update_replaces_target_only() {
 fn test_mcp_overwrite_via_remove_then_add() {
 	let test = TestConfigBuilder::new(AgentType::Copilot)
 		.with_content(
-			r#"{"servers": {"bar": {"type": "stdio", "command": "bar-cmd"}}}"#,
+			r#"{"mcpServers": {"bar": {"type": "local", "command": "bar-cmd"}}}"#,
 		)
 		.build()
 		.unwrap();
@@ -1784,4 +1782,54 @@ fn test_adapter_mcp_config_path_hides_both_scope() {
 		adapter.mcp_config_path(Some(temp.path()), ResourceScope::Both),
 		None
 	);
+}
+
+#[test]
+fn qoder_secondary_mcp_sources_are_not_rewritten_through_project_scope() {
+	let project = tempfile::tempdir().unwrap();
+	std::fs::create_dir_all(project.path().join(".qoder")).unwrap();
+	std::fs::write(
+		project.path().join(".qoder/settings.local.json"),
+		r#"{"mcpServers":{"local":{"command":"local"}}}"#,
+	)
+	.unwrap();
+	std::fs::write(
+		project.path().join(".mcp.json"),
+		r#"{"mcpServers":{"workspace":{"command":"workspace"}}}"#,
+	)
+	.unwrap();
+	std::fs::write(
+		project.path().join(".qoder/settings.json"),
+		r#"{"mcpServers":{"project":{"command":"project"}}}"#,
+	)
+	.unwrap();
+	let mut manager = ConfigManager::new(
+		aghub_core::adapters::create_adapter(AgentType::Qoder),
+		false,
+		Some(project.path()),
+	);
+	manager.load().unwrap();
+
+	let error = manager.remove_mcp("local").unwrap_err();
+	assert!(
+		matches!(error, ConfigError::UnsupportedOperation(_)),
+		"{error:?}"
+	);
+	manager
+		.update_mcp(
+			"project",
+			McpServer::new(
+				"project",
+				McpTransport::stdio("updated", Vec::new()),
+			),
+		)
+		.unwrap();
+
+	let saved =
+		std::fs::read_to_string(project.path().join(".qoder/settings.json"))
+			.unwrap();
+	let saved: serde_json::Value = serde_json::from_str(&saved).unwrap();
+	assert_eq!(saved["mcpServers"]["project"]["command"], "updated");
+	assert!(saved["mcpServers"].get("local").is_none());
+	assert!(saved["mcpServers"].get("workspace").is_none());
 }
