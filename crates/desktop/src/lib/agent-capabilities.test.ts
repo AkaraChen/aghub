@@ -13,6 +13,7 @@ function agentWithWritePaths(
 	return {
 		id: "test",
 		display_name: "Test",
+		surfaces: [],
 		capabilities: {
 			skills: {
 				scopes: { global: true, project: true },

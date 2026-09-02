@@ -2,7 +2,7 @@ use aghub_core::models::SubAgent;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::dto::common::ConfigSource;
+use crate::dto::common::{ConfigSource, ResourceOriginDto};
 
 #[derive(Debug, Deserialize, TS)]
 #[ts(export)]
@@ -20,6 +20,7 @@ impl From<CreateSubAgentRequest> for SubAgent {
 			instruction: Some(req.instruction),
 			source_path: None,
 			config_source: None,
+			origin: None,
 		}
 	}
 }
@@ -56,6 +57,9 @@ pub struct SubAgentResponse {
 	pub source: Option<ConfigSource>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub agent: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub origin: Option<ResourceOriginDto>,
 }
 
 impl From<SubAgent> for SubAgentResponse {
@@ -73,6 +77,7 @@ impl From<&SubAgent> for SubAgentResponse {
 			source_path: s.source_path.clone(),
 			source: s.config_source.map(Into::into),
 			agent: None,
+			origin: s.origin.as_ref().map(Into::into),
 		}
 	}
 }

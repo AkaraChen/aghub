@@ -13,7 +13,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
-use aghub_agents::models::{ConfigSource, ResourceScope};
+use aghub_agents::models::{ConfigSource, ResourceOrigin, ResourceScope};
 use aghub_agents::AgentDescriptor;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -30,6 +30,7 @@ pub struct RuleFile {
 	pub path: PathBuf,
 	pub source: ConfigSource,
 	pub exists: bool,
+	pub origin: ResourceOrigin,
 }
 
 fn descriptor_rule_paths(
@@ -37,23 +38,41 @@ fn descriptor_rule_paths(
 	scope: ResourceScope,
 	project_root: Option<&Path>,
 ) -> Vec<(PathBuf, ConfigSource)> {
-	let mut paths = Vec::new();
+	let global = || {
+		descriptor
+			.global_rule_paths()
+			.into_iter()
+			.map(|path| (path, ConfigSource::Global))
+			.collect::<Vec<_>>()
+	};
+	let project = || {
+		project_root
+			.map(|root| {
+				descriptor
+					.project_rule_paths(root)
+					.into_iter()
+					.map(|path| (path, ConfigSource::Project))
+					.collect::<Vec<_>>()
+			})
+			.unwrap_or_default()
+	};
 
-	if matches!(scope, ResourceScope::GlobalOnly | ResourceScope::Both) {
-		for path in descriptor.global_rule_paths() {
-			paths.push((path, ConfigSource::Global));
+	match scope {
+		ResourceScope::GlobalOnly => global(),
+		ResourceScope::ProjectOnly => project(),
+		ResourceScope::Both => {
+			let (mut first, second) = match descriptor.precedence.rules {
+				aghub_agents::ScopePrecedence::ProjectThenGlobal => {
+					(project(), global())
+				}
+				aghub_agents::ScopePrecedence::GlobalThenProject => {
+					(global(), project())
+				}
+			};
+			first.extend(second);
+			first
 		}
 	}
-
-	if matches!(scope, ResourceScope::ProjectOnly | ResourceScope::Both) {
-		if let Some(root) = project_root {
-			for path in descriptor.project_rule_paths(root) {
-				paths.push((path, ConfigSource::Project));
-			}
-		}
-	}
-
-	paths
 }
 
 /// List the rule files declared by a single agent for the given scope.
@@ -64,9 +83,11 @@ pub fn list_rule_files(
 ) -> Vec<RuleFile> {
 	descriptor_rule_paths(descriptor, scope, project_root)
 		.into_iter()
-		.map(|(path, source)| RuleFile {
+		.enumerate()
+		.map(|(precedence, (path, source))| RuleFile {
 			agent: descriptor.id.to_string(),
 			exists: path.is_file(),
+			origin: descriptor.rule_origin(&path, source, precedence),
 			path,
 			source,
 		})
@@ -326,11 +347,12 @@ pub fn display_path(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
 	use super::{
-		read_rule_file, read_rule_file_snapshot, write_rule_file,
-		write_rule_file_if_unchanged, write_rule_file_with_version,
-		RuleWriteError,
+		list_rule_files, read_rule_file, read_rule_file_snapshot,
+		write_rule_file, write_rule_file_if_unchanged,
+		write_rule_file_with_version, RuleWriteError,
 	};
 	use crate::rule_versions::RuleVersionStore;
+	use aghub_agents::models::{ResourceScope, ResourceSourceKind};
 
 	#[test]
 	fn write_creates_then_replaces() {
@@ -342,6 +364,51 @@ mod tests {
 
 		write_rule_file(&path, "second").unwrap();
 		assert_eq!(read_rule_file(&path).unwrap(), "second");
+	}
+
+	#[test]
+	fn cursor_rules_report_native_and_historical_origins() {
+		let temp = tempfile::tempdir().unwrap();
+		let rules_dir = temp.path().join(".cursor/rules");
+		std::fs::create_dir_all(&rules_dir).unwrap();
+		std::fs::write(rules_dir.join("rust.mdc"), "rule").unwrap();
+		let descriptor = &aghub_agents::agents::cursor::DESCRIPTOR;
+
+		let rules = list_rule_files(
+			descriptor,
+			ResourceScope::ProjectOnly,
+			Some(temp.path()),
+		);
+		let native = rules
+			.iter()
+			.find(|rule| rule.path.ends_with("rust.mdc"))
+			.unwrap();
+		let legacy = rules
+			.iter()
+			.find(|rule| rule.path.ends_with(".cursorrules"))
+			.unwrap();
+		assert_eq!(native.origin.product_id, "cursor");
+		assert_eq!(native.origin.surface_ids, ["ide", "cli", "cloud"]);
+		assert_eq!(native.origin.source_kind, ResourceSourceKind::Native);
+		assert_eq!(legacy.origin.source_kind, ResourceSourceKind::Historical);
+	}
+
+	#[test]
+	fn qoder_rules_follow_project_then_global_precedence() {
+		let temp = tempfile::tempdir().unwrap();
+		let rules = list_rule_files(
+			&aghub_agents::agents::qoder::DESCRIPTOR,
+			ResourceScope::Both,
+			Some(temp.path()),
+		);
+
+		assert_eq!(rules[0].source, aghub_agents::ConfigSource::Project);
+		assert!(rules[0].path.ends_with("AGENTS.md"));
+		assert_eq!(
+			rules.last().unwrap().source,
+			aghub_agents::ConfigSource::Global
+		);
+		assert_eq!(rules[0].origin.source_kind, ResourceSourceKind::Standard);
 	}
 
 	#[test]

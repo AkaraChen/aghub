@@ -100,8 +100,12 @@ export default function SkillsPage() {
 	const includeCodexProvidedSkills =
 		skillPreferencesReady && skillPreferences.discovery.agentProvidedSkills;
 	const codexCliAvailable = Boolean(
-		availableAgents.find((agent) => agent.id === "codex")?.availability
-			.has_cli,
+		availableAgents
+			.find((agent) => agent.id === "codex")
+			?.availability.surfaces.some(
+				(surface) =>
+					surface.kind === "cli" && surface.state === "detected",
+			),
 	);
 	const codexProvidedSkillsQuery = useQuery(
 		codexProvidedSkillsQueryOptions({

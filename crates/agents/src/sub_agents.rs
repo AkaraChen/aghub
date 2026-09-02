@@ -47,6 +47,7 @@ pub fn parse_sub_agent_file(path: &Path) -> Option<SubAgent> {
 			instruction: Some(body.to_string()),
 			source_path: Some(path.to_string_lossy().into_owned()),
 			config_source: None,
+			origin: None,
 		}),
 		Ok((None, body)) => Some(SubAgent {
 			name: stem,
@@ -54,6 +55,7 @@ pub fn parse_sub_agent_file(path: &Path) -> Option<SubAgent> {
 			instruction: Some(body.to_string()),
 			source_path: Some(path.to_string_lossy().into_owned()),
 			config_source: None,
+			origin: None,
 		}),
 		Err(_) => Some(SubAgent {
 			name: stem,
@@ -61,16 +63,46 @@ pub fn parse_sub_agent_file(path: &Path) -> Option<SubAgent> {
 			instruction: Some(content),
 			source_path: Some(path.to_string_lossy().into_owned()),
 			config_source: None,
+			origin: None,
 		}),
 	}
 }
 
 /// Format a [`SubAgent`] as markdown with YAML frontmatter.
 pub fn format_sub_agent(agent: &SubAgent) -> Result<String> {
-	let front = SubAgentFrontmatter {
-		name: agent.name.clone(),
-		description: agent.description.clone(),
+	format_sub_agent_with_original(agent, None)
+}
+
+fn format_sub_agent_with_original(
+	agent: &SubAgent,
+	original_content: Option<&str>,
+) -> Result<String> {
+	let mut front = match original_content {
+		Some(content) => {
+			aghub_markdown::parse_opt::<serde_yaml::Mapping>(content)
+				.map(|(front, _)| front.unwrap_or_default())
+				.map_err(|error| {
+					ConfigError::InvalidConfig(error.to_string())
+				})?
+		}
+		None => serde_yaml::Mapping::new(),
 	};
+	front.insert(
+		serde_yaml::Value::String("name".to_string()),
+		serde_yaml::Value::String(agent.name.clone()),
+	);
+	let description_key = serde_yaml::Value::String("description".to_string());
+	match &agent.description {
+		Some(description) => {
+			front.insert(
+				description_key,
+				serde_yaml::Value::String(description.clone()),
+			);
+		}
+		None => {
+			front.remove(&description_key);
+		}
+	}
 	let default_body;
 	let body: &str = if let Some(instruction) = &agent.instruction {
 		instruction.as_str()
@@ -123,7 +155,15 @@ pub fn save_sub_agent_to_dir(dir: &Path, agent: &SubAgent) -> Result<()> {
 	fs::create_dir_all(dir)?;
 	let safe = sanitize_filename(&agent.name);
 	let file = dir.join(format!("{safe}.md"));
-	fs::write(&file, format_sub_agent(agent)?)?;
+	let original = match fs::read_to_string(&file) {
+		Ok(content) => Some(content),
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+		Err(error) => return Err(error.into()),
+	};
+	fs::write(
+		&file,
+		format_sub_agent_with_original(agent, original.as_deref())?,
+	)?;
 	Ok(())
 }
 
@@ -233,6 +273,7 @@ mod tests {
 			instruction: Some("Do X.".to_string()),
 			source_path: None,
 			config_source: None,
+			origin: None,
 		};
 		save_sub_agent_to_dir(dir.path(), &agent).unwrap();
 
@@ -241,6 +282,43 @@ mod tests {
 		assert_eq!(loaded[0].name, "Test Agent");
 		assert_eq!(loaded[0].description, Some("desc: with colon".to_string()));
 		assert_eq!(loaded[0].instruction, Some("Do X.".to_string()));
+	}
+
+	#[test]
+	fn save_preserves_unknown_frontmatter_fields() {
+		let dir = TempDir::new().unwrap();
+		let path = dir.path().join("reviewer.md");
+		fs::write(
+			&path,
+			concat!(
+				"---\n",
+				"name: reviewer\n",
+				"description: Old\n",
+				"model: fast\n",
+				"readonly: true\n",
+				"---\n",
+				"Old body",
+			),
+		)
+		.unwrap();
+		let agent = SubAgent {
+			name: "reviewer".to_string(),
+			description: Some("Updated".to_string()),
+			instruction: Some("New body".to_string()),
+			source_path: Some(path.to_string_lossy().into_owned()),
+			config_source: None,
+			origin: None,
+		};
+
+		save_sub_agent_to_dir(dir.path(), &agent).unwrap();
+
+		let content = fs::read_to_string(path).unwrap();
+		let (frontmatter, body) =
+			aghub_markdown::parse::<serde_yaml::Mapping>(&content).unwrap();
+		assert_eq!(frontmatter["model"], "fast");
+		assert_eq!(frontmatter["readonly"], true);
+		assert_eq!(frontmatter["description"], "Updated");
+		assert_eq!(body, "New body");
 	}
 
 	#[test]

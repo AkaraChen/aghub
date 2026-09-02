@@ -1,6 +1,8 @@
 use crate::errors::{ConfigError, Result};
 use crate::models::{
-	AgentConfig, McpServer, McpTransport, ResourceScope, SubAgent,
+	AgentConfig, ConfigSource, McpServer, McpTransport, ResourceOrigin,
+	ResourceScope, ResourceSourceKind, ResourceWritePolicy, RuntimeVisibility,
+	SubAgent,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -34,6 +36,148 @@ pub type OptionalProjectPathFn = fn(&Path) -> Option<PathBuf>;
 
 pub const UNIVERSAL_SKILL_TARGET_ID: &str = "universal";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScopePrecedence {
+	ProjectThenGlobal,
+	GlobalThenProject,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResourcePrecedence {
+	pub skills: ScopePrecedence,
+	pub mcp: ScopePrecedence,
+	pub sub_agents: ScopePrecedence,
+	pub rules: ScopePrecedence,
+}
+
+impl ResourcePrecedence {
+	pub const fn uniform(precedence: ScopePrecedence) -> Self {
+		Self {
+			skills: precedence,
+			mcp: precedence,
+			sub_agents: precedence,
+			rules: precedence,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentSurfaceKind {
+	Cli,
+	Ide,
+	Desktop,
+	Cloud,
+	RemoteWorkspace,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AgentSurface {
+	pub id: &'static str,
+	pub kind: AgentSurfaceKind,
+	pub cli_names: &'static [&'static str],
+	pub runtime_paths: &'static [OptionalPathFn],
+	pub configuration_paths: &'static [OptionalPathFn],
+	pub validate_args: &'static [&'static str],
+	pub skill_path_markers: &'static [&'static str],
+	pub capabilities: Option<Capabilities>,
+}
+
+impl AgentSurface {
+	pub const fn cli(
+		id: &'static str,
+		cli_names: &'static [&'static str],
+		configuration_paths: &'static [OptionalPathFn],
+		validate_args: &'static [&'static str],
+	) -> Self {
+		Self {
+			id,
+			kind: AgentSurfaceKind::Cli,
+			cli_names,
+			runtime_paths: &[],
+			configuration_paths,
+			validate_args,
+			skill_path_markers: &[],
+			capabilities: None,
+		}
+	}
+
+	pub const fn ide(
+		id: &'static str,
+		runtime_paths: &'static [OptionalPathFn],
+		configuration_paths: &'static [OptionalPathFn],
+	) -> Self {
+		Self {
+			id,
+			kind: AgentSurfaceKind::Ide,
+			cli_names: &[],
+			runtime_paths,
+			configuration_paths,
+			validate_args: &[],
+			skill_path_markers: &[],
+			capabilities: None,
+		}
+	}
+
+	pub const fn desktop(
+		id: &'static str,
+		runtime_paths: &'static [OptionalPathFn],
+		configuration_paths: &'static [OptionalPathFn],
+	) -> Self {
+		Self {
+			id,
+			kind: AgentSurfaceKind::Desktop,
+			cli_names: &[],
+			runtime_paths,
+			configuration_paths,
+			validate_args: &[],
+			skill_path_markers: &[],
+			capabilities: None,
+		}
+	}
+
+	pub const fn cloud(id: &'static str) -> Self {
+		Self {
+			id,
+			kind: AgentSurfaceKind::Cloud,
+			cli_names: &[],
+			runtime_paths: &[],
+			configuration_paths: &[],
+			validate_args: &[],
+			skill_path_markers: &[],
+			capabilities: None,
+		}
+	}
+
+	pub const fn remote_workspace(id: &'static str) -> Self {
+		Self {
+			id,
+			kind: AgentSurfaceKind::RemoteWorkspace,
+			cli_names: &[],
+			runtime_paths: &[],
+			configuration_paths: &[],
+			validate_args: &[],
+			skill_path_markers: &[],
+			capabilities: None,
+		}
+	}
+
+	pub const fn with_capabilities(
+		mut self,
+		capabilities: Capabilities,
+	) -> Self {
+		self.capabilities = Some(capabilities);
+		self
+	}
+
+	pub const fn with_skill_path_markers(
+		mut self,
+		markers: &'static [&'static str],
+	) -> Self {
+		self.skill_path_markers = markers;
+		self
+	}
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ScopeSupport {
 	pub global: bool,
@@ -44,6 +188,26 @@ pub struct ScopeSupport {
 pub struct SkillCapabilities {
 	pub scopes: ScopeSupport,
 	pub universal: bool,
+	pub discovery: SkillDiscovery,
+	pub universal_global_path: Option<OptionalPathFn>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SkillDiscovery {
+	pub include_nested: bool,
+	pub include_flat_markdown: bool,
+}
+
+impl SkillDiscovery {
+	pub const STANDARD: Self = Self {
+		include_nested: true,
+		include_flat_markdown: false,
+	};
+
+	pub const DIRECT_BUNDLES_AND_MARKDOWN: Self = Self {
+		include_nested: false,
+		include_flat_markdown: true,
+	};
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -71,12 +235,35 @@ pub struct Capabilities {
 pub struct GlobalSkillPaths {
 	pub read: fn() -> Vec<PathBuf>,
 	pub write: fn() -> Option<PathBuf>,
+	pub classify: Option<SkillSourceClassifier>,
 }
 
 #[derive(Clone, Copy)]
 pub struct ProjectSkillPaths {
 	pub read: fn(&Path) -> Vec<PathBuf>,
 	pub write: fn(&Path) -> Option<PathBuf>,
+	pub classify: Option<SkillSourceClassifier>,
+}
+
+pub type SkillSourceClassifier = fn(&Path) -> SkillSourceClassification;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SkillSourceClassification {
+	pub source_kind: ResourceSourceKind,
+	pub runtime_visibility: RuntimeVisibility,
+	pub runtime_visibility_evidence: &'static str,
+}
+
+#[derive(Clone, Copy)]
+pub struct GlobalSubAgentPaths {
+	pub read: fn() -> Vec<PathBuf>,
+	pub write: OptionalPathFn,
+}
+
+#[derive(Clone, Copy)]
+pub struct ProjectSubAgentPaths {
+	pub read: fn(&Path) -> Vec<PathBuf>,
+	pub write: OptionalProjectPathFn,
 }
 
 /// Locations of an agent's instruction/rule files (e.g. CLAUDE.md, AGENTS.md).
@@ -87,10 +274,32 @@ pub struct RulePaths {
 	pub project: Option<fn(&Path) -> Vec<PathBuf>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkillReadSource {
+	pub root: PathBuf,
+	pub surface_ids: Vec<&'static str>,
+	pub scope: ConfigSource,
+	pub source_kind: ResourceSourceKind,
+	pub precedence: usize,
+	pub write_policy: ResourceWritePolicy,
+	pub runtime_visibility: RuntimeVisibility,
+	pub runtime_visibility_evidence: &'static str,
+}
+
+pub struct McpReadSource {
+	pub path: PathBuf,
+	pub source_kind: ResourceSourceKind,
+	pub write_policy: ResourceWritePolicy,
+	pub runtime_visibility: RuntimeVisibility,
+	pub runtime_visibility_evidence: &'static str,
+}
+
 /// Static descriptor for an agent — one per agent, declared in agents/*.rs
 pub struct AgentDescriptor {
 	pub id: &'static str,
 	pub display_name: &'static str,
+	pub surfaces: &'static [AgentSurface],
+	pub precedence: ResourcePrecedence,
 	/// Parse raw MCP config content into AgentConfig.
 	pub mcp_parse_config: Option<McpParseFn>,
 	/// Serialize MCP config content back to raw text.
@@ -103,19 +312,17 @@ pub struct AgentDescriptor {
 	pub mcp_global_path: Option<OptionalPathFn>,
 	/// Project MCP config path for display, validation, and discovery.
 	pub mcp_project_path: Option<OptionalProjectPathFn>,
-	/// Agent-specific global data directory used for availability checks.
-	pub global_data_dir: fn() -> Option<PathBuf>,
 	pub capabilities: Capabilities,
 	pub global_skill_paths: Option<GlobalSkillPaths>,
 	pub project_skill_paths: Option<ProjectSkillPaths>,
+	pub global_sub_agent_paths: Option<GlobalSubAgentPaths>,
+	pub project_sub_agent_paths: Option<ProjectSubAgentPaths>,
 	/// Load sub-agents for the requested scope.
 	/// Implementation is fully internal — no path information is exposed.
 	pub load_sub_agents: LoadSubAgentsFn,
 	/// Persist sub-agents for the requested scope.
 	/// Implementation is fully internal — no path information is exposed.
 	pub save_sub_agents: SaveSubAgentsFn,
-	pub cli_name: &'static str,
-	pub validate_args: &'static [&'static str],
 	/// Directory/file markers that indicate this agent's project root
 	pub project_markers: &'static [&'static str],
 	/// Maps to the `-a, --agent` argument of `npx skills add` CLI
@@ -127,6 +334,91 @@ pub struct AgentDescriptor {
 }
 
 impl AgentDescriptor {
+	pub fn skill_read_sources(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Vec<SkillReadSource> {
+		let config_source = match scope {
+			ResourceScope::GlobalOnly => ConfigSource::Global,
+			ResourceScope::ProjectOnly => ConfigSource::Project,
+			ResourceScope::Both => return Vec::new(),
+		};
+		let write_path = self.skill_write_path(project_root, scope);
+		let classify = match scope {
+			ResourceScope::GlobalOnly => {
+				self.global_skill_paths.and_then(|paths| paths.classify)
+			}
+			ResourceScope::ProjectOnly => {
+				self.project_skill_paths.and_then(|paths| paths.classify)
+			}
+			ResourceScope::Both => None,
+		};
+
+		self.skill_read_paths(project_root, scope)
+			.into_iter()
+			.enumerate()
+			.map(|(precedence, root)| {
+				let surface_ids = self
+					.surfaces
+					.iter()
+					.filter(|surface| {
+						let capabilities =
+							surface.capabilities.unwrap_or(self.capabilities);
+						let supports_scope = match scope {
+							ResourceScope::GlobalOnly => {
+								capabilities.skills.scopes.global
+							}
+							ResourceScope::ProjectOnly => {
+								capabilities.skills.scopes.project
+							}
+							ResourceScope::Both => false,
+						};
+						supports_scope
+							&& surface_matches_skill_path(surface, &root)
+					})
+					.map(|surface| surface.id)
+					.collect::<Vec<_>>();
+				let write_policy = if write_path.as_ref() == Some(&root) {
+					ResourceWritePolicy::ReadWrite
+				} else {
+					ResourceWritePolicy::ReadOnly
+				};
+				let classification = classify.map(|classify| classify(&root));
+				let source_kind = classification
+					.map(|value| value.source_kind)
+					.unwrap_or_else(|| {
+						resource_source_kind(
+							self.id,
+							&root,
+							precedence,
+							write_path.as_deref(),
+						)
+					});
+				let runtime_visibility = classification
+					.map(|value| value.runtime_visibility)
+					.unwrap_or_else(|| match source_kind {
+						ResourceSourceKind::External => {
+							RuntimeVisibility::Conditional
+						}
+						_ => RuntimeVisibility::Visible,
+					});
+				SkillReadSource {
+					root,
+					surface_ids,
+					scope: config_source,
+					source_kind,
+					precedence,
+					write_policy,
+					runtime_visibility,
+					runtime_visibility_evidence: classification
+						.map(|value| value.runtime_visibility_evidence)
+						.unwrap_or("declared by the Agent Skill loader"),
+				}
+			})
+			.collect()
+	}
+
 	pub fn supports_skill_scope(&self, scope: ResourceScope) -> bool {
 		match scope {
 			ResourceScope::GlobalOnly => self.capabilities.skills.scopes.global,
@@ -166,6 +458,82 @@ impl AgentDescriptor {
 		}
 	}
 
+	pub fn sub_agent_read_sources(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Vec<SkillReadSource> {
+		let config_source = match scope {
+			ResourceScope::GlobalOnly => ConfigSource::Global,
+			ResourceScope::ProjectOnly => ConfigSource::Project,
+			ResourceScope::Both => return Vec::new(),
+		};
+		let paths = match scope {
+			ResourceScope::GlobalOnly => self
+				.global_sub_agent_paths
+				.map(|paths| (paths.read)())
+				.unwrap_or_default(),
+			ResourceScope::ProjectOnly => project_root
+				.and_then(|root| {
+					self.project_sub_agent_paths.map(|paths| (paths.read)(root))
+				})
+				.unwrap_or_default(),
+			ResourceScope::Both => Vec::new(),
+		};
+		let write_path = match scope {
+			ResourceScope::GlobalOnly => self
+				.global_sub_agent_paths
+				.and_then(|paths| (paths.write)()),
+			ResourceScope::ProjectOnly => project_root.and_then(|root| {
+				self.project_sub_agent_paths
+					.and_then(|paths| (paths.write)(root))
+			}),
+			ResourceScope::Both => None,
+		};
+		let surface_ids = self
+			.surfaces
+			.iter()
+			.filter(|surface| {
+				let scopes = surface
+					.capabilities
+					.unwrap_or(self.capabilities)
+					.sub_agents
+					.scopes;
+				match scope {
+					ResourceScope::GlobalOnly => scopes.global,
+					ResourceScope::ProjectOnly => scopes.project,
+					ResourceScope::Both => false,
+				}
+			})
+			.map(|surface| surface.id)
+			.collect::<Vec<_>>();
+
+		paths
+			.into_iter()
+			.enumerate()
+			.map(|(precedence, root)| SkillReadSource {
+				write_policy: if write_path.as_ref() == Some(&root) {
+					ResourceWritePolicy::ReadWrite
+				} else {
+					ResourceWritePolicy::ReadOnly
+				},
+				source_kind: resource_source_kind(
+					self.id,
+					&root,
+					precedence,
+					write_path.as_deref(),
+				),
+				root,
+				surface_ids: surface_ids.clone(),
+				scope: config_source,
+				precedence,
+				runtime_visibility: RuntimeVisibility::Visible,
+				runtime_visibility_evidence:
+					"declared by the Agent subagent loader",
+			})
+			.collect()
+	}
+
 	pub fn skill_write_path(
 		&self,
 		project_root: Option<&Path>,
@@ -196,7 +564,13 @@ impl AgentDescriptor {
 		let mut dirs = self.native_global_skill_read_paths();
 
 		if self.capabilities.skills.universal {
-			if let Some(path) = get_universal_skills_path() {
+			let universal_path = self
+				.capabilities
+				.skills
+				.universal_global_path
+				.and_then(|resolve| resolve())
+				.or_else(get_universal_skills_path);
+			if let Some(path) = universal_path {
 				if !dirs.contains(&path) {
 					dirs.push(path);
 				}
@@ -318,6 +692,90 @@ impl AgentDescriptor {
 			.map(|read| read(project_root))
 			.unwrap_or_default()
 	}
+
+	pub fn rule_origin(
+		&self,
+		path: &Path,
+		scope: ConfigSource,
+		precedence: usize,
+	) -> ResourceOrigin {
+		let file_name = path.file_name().and_then(|value| value.to_str());
+		let source_kind = if path.ends_with(".cursorrules") {
+			ResourceSourceKind::Historical
+		} else if file_name == Some("AGENTS.md") {
+			ResourceSourceKind::Standard
+		} else if file_name == Some("CLAUDE.md") && self.id != "claude" {
+			ResourceSourceKind::Compatible
+		} else {
+			ResourceSourceKind::Native
+		};
+		ResourceOrigin {
+			product_id: self.id.to_string(),
+			surface_ids: self
+				.surfaces
+				.iter()
+				.map(|surface| surface.id)
+				.map(str::to_string)
+				.collect(),
+			scope,
+			source_kind,
+			physical_location: Some(path.to_string_lossy().into_owned()),
+			precedence,
+			write_policy: ResourceWritePolicy::ReadWrite,
+			runtime_visibility: RuntimeVisibility::Visible,
+			runtime_visibility_evidence: Some(
+				"declared by the Agent rule loader".to_string(),
+			),
+		}
+	}
+}
+
+fn surface_matches_skill_path(surface: &AgentSurface, path: &Path) -> bool {
+	if surface.skill_path_markers.is_empty() {
+		return true;
+	}
+	let normalized = path.to_string_lossy().replace('\\', "/");
+	surface
+		.skill_path_markers
+		.iter()
+		.any(|marker| normalized.contains(marker))
+}
+
+fn resource_source_kind(
+	product_id: &str,
+	path: &Path,
+	precedence: usize,
+	write_path: Option<&Path>,
+) -> ResourceSourceKind {
+	let normalized = path.to_string_lossy().replace('\\', "/");
+	if normalized.contains("/plugin-cache/") || normalized.contains("/plugins/")
+	{
+		ResourceSourceKind::Plugin
+	} else if normalized.contains("/.agents/") {
+		ResourceSourceKind::Standard
+	} else if normalized.starts_with("/etc/") {
+		ResourceSourceKind::System
+	} else if ["/.clawdbot/", "/.moltbot/", "/.mux/", "/.zencoder/"]
+		.iter()
+		.any(|part| normalized.contains(part))
+	{
+		ResourceSourceKind::Historical
+	} else if write_path == Some(path) {
+		ResourceSourceKind::Native
+	} else if [
+		("claude", "/.claude/"),
+		("cursor", "/.cursor/"),
+		("codex", "/.codex/"),
+	]
+	.iter()
+	.any(|(owner, part)| product_id != *owner && normalized.contains(part))
+	{
+		ResourceSourceKind::Compatible
+	} else if precedence == 0 {
+		ResourceSourceKind::Native
+	} else {
+		ResourceSourceKind::External
+	}
 }
 
 /// Get the global directory shared by Agent Skills compatible tools.
@@ -338,6 +796,42 @@ pub fn load_mcps_from_file(
 		Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
 		Err(e) => Err(e.into()),
 	}
+}
+
+pub fn load_mcps_from_sources(
+	product_id: &str,
+	surface_ids: &[&str],
+	scope: ConfigSource,
+	sources: Vec<McpReadSource>,
+	parse: McpParseFn,
+) -> Result<Vec<McpServer>> {
+	let mut mcps = Vec::new();
+	for (precedence, source) in sources.into_iter().enumerate() {
+		let loaded = load_mcps_from_file(&source.path, parse)?;
+		for mut mcp in loaded {
+			mcp.config_source = Some(scope);
+			mcp.origin = Some(ResourceOrigin {
+				product_id: product_id.to_string(),
+				surface_ids: surface_ids
+					.iter()
+					.map(|id| (*id).to_string())
+					.collect(),
+				scope,
+				source_kind: source.source_kind,
+				physical_location: Some(
+					source.path.to_string_lossy().into_owned(),
+				),
+				precedence,
+				write_policy: source.write_policy,
+				runtime_visibility: source.runtime_visibility,
+				runtime_visibility_evidence: Some(
+					source.runtime_visibility_evidence.to_string(),
+				),
+			});
+			mcps.push(mcp);
+		}
+	}
+	Ok(mcps)
 }
 
 pub fn save_mcps_to_file(
@@ -455,6 +949,25 @@ pub fn save_sub_agents_noop(
 	_: &[SubAgent],
 ) -> Result<()> {
 	Ok(())
+}
+
+pub(crate) fn load_no_mcps(
+	_: Option<&Path>,
+	_: ResourceScope,
+) -> Result<Vec<McpServer>> {
+	Ok(Vec::new())
+}
+
+pub(crate) fn reject_mcp_save(
+	_: Option<&Path>,
+	_: ResourceScope,
+	_: &[McpServer],
+) -> Result<()> {
+	Err(ConfigError::unsupported_operation(
+		"persist",
+		"MCP server",
+		"Agent without MCP support",
+	))
 }
 
 /// MCP config strategy functions for common config formats

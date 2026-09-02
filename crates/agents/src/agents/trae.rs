@@ -40,30 +40,66 @@ fn save_mcps(
 		mcp_strategy::serialize_json_map_mcp_servers,
 	)
 }
+fn global_skills_paths() -> Vec<PathBuf> {
+	let Some(home) = home_dir() else {
+		return Vec::new();
+	};
+	vec![home.join(".traecli/skills"), home.join(".trae-cn/skills")]
+}
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
-	vec![root.join(".trae/skills")]
+	vec![
+		root.join(".traecli/skills"),
+		root.join(".trae/skills"),
+		root.join(".agents/skills"),
+	]
+}
+fn global_skill_write_path() -> Option<PathBuf> {
+	home_dir().map(|home| home.join(".traecli/skills"))
 }
 fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
-	Some(root.join(".trae/skills"))
+	Some(root.join(".traecli/skills"))
+}
+
+fn ide_runtime_path() -> Option<PathBuf> {
+	#[cfg(target_os = "macos")]
+	{
+		Some(PathBuf::from("/Applications/Trae.app"))
+	}
+	#[cfg(target_os = "linux")]
+	{
+		Some(PathBuf::from("/usr/share/applications/trae.desktop"))
+	}
+	#[cfg(target_os = "windows")]
+	{
+		dirs::data_local_dir().map(|dir| dir.join("Programs/Trae/Trae.exe"))
+	}
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "trae",
 	display_name: "Trae",
+	surfaces: &[
+		AgentSurface::ide("ide", &[ide_runtime_path], &[global_data_dir])
+			.with_skill_path_markers(&["/.trae/", "/.trae-cn/"]),
+		AgentSurface::cli("cli", &["traecli"], &[], &["--version"])
+			.with_skill_path_markers(&["/.traecli/", "/.trae/", "/.trae-cn/"]),
+	],
+	precedence: ResourcePrecedence::uniform(ScopePrecedence::ProjectThenGlobal),
 	mcp_parse_config: Some(mcp_strategy::parse_json_map_mcp_servers),
 	mcp_serialize_config: Some(mcp_strategy::serialize_json_map_mcp_servers),
 	load_mcps,
 	save_mcps,
 	mcp_global_path: None,
 	mcp_project_path: Some(mcp_project_path),
-	global_data_dir,
 	capabilities: Capabilities {
 		skills: SkillCapabilities {
 			scopes: ScopeSupport {
-				global: false,
+				global: true,
 				project: true,
 			},
 			universal: false,
+			discovery: SkillDiscovery::STANDARD,
+			universal_global_path: None,
 		},
 		mcp: McpCapabilities {
 			scopes: ScopeSupport {
@@ -82,16 +118,21 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 			},
 		},
 	},
-	global_skill_paths: None,
+	global_skill_paths: Some(GlobalSkillPaths {
+		read: global_skills_paths,
+		write: global_skill_write_path,
+		classify: None,
+	}),
 	project_skill_paths: Some(ProjectSkillPaths {
 		read: project_skills_paths,
 		write: project_skill_write_path,
+		classify: None,
 	}),
+	global_sub_agent_paths: None,
+	project_sub_agent_paths: None,
 	load_sub_agents: load_sub_agents_noop,
 	save_sub_agents: save_sub_agents_noop,
-	cli_name: "trae",
-	validate_args: &["--version"],
-	project_markers: &[".trae"],
+	project_markers: &[".trae", ".traecli"],
 	skills_cli_name: Some("trae"),
 	rule_paths: None,
 };

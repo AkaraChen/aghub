@@ -28,6 +28,7 @@ struct MapMcpServer {
 enum JsonMcpDialect {
 	Standard,
 	Gemini,
+	Copilot,
 }
 
 fn parse_root(content: &str) -> Result<Map<String, Value>> {
@@ -57,7 +58,10 @@ fn parse_entry(
 	if let Some(kind) = value.get("type").and_then(Value::as_str) {
 		if !matches!(
 			kind,
-			"stdio" | "sse" | "http" | "streamable-http" | "streamableHttp"
+			"stdio"
+				| "local" | "sse"
+				| "http" | "streamable-http"
+				| "streamableHttp"
 		) {
 			return Ok(None);
 		}
@@ -67,7 +71,7 @@ fn parse_entry(
 			ConfigError::InvalidConfig(format!("MCP '{name}': {error}"))
 		})?;
 	let transport = match mcp.server_type.as_deref() {
-		Some("stdio") => McpTransport::Stdio {
+		Some("stdio" | "local") => McpTransport::Stdio {
 			command: mcp.command.ok_or_else(|| {
 				ConfigError::InvalidConfig(format!(
 					"MCP '{name}' requires command"
@@ -169,6 +173,60 @@ pub fn serialize_gemini(
 	original: Option<&str>,
 ) -> Result<String> {
 	serialize_dialect(config, original, "mcpServers", JsonMcpDialect::Gemini)
+}
+
+pub fn parse_copilot(content: &str) -> Result<AgentConfig> {
+	let root = parse_root(content)?;
+	if root.contains_key("mcpServers") {
+		return parse_dialect(content, "mcpServers", JsonMcpDialect::Copilot);
+	}
+	let mut config = AgentConfig::new();
+	for (name, value) in &root {
+		if let Some(server) = parse_entry(name, value, JsonMcpDialect::Copilot)?
+		{
+			config.mcps.push(server);
+		}
+	}
+	Ok(config)
+}
+
+pub fn serialize_copilot(
+	config: &AgentConfig,
+	original: Option<&str>,
+) -> Result<String> {
+	let original_root = parse_root(original.unwrap_or(""))?;
+	let uses_bare_map = if original_root.contains_key("mcpServers") {
+		false
+	} else {
+		original_root
+			.iter()
+			.try_fold(false, |found, (name, value)| {
+				parse_entry(name, value, JsonMcpDialect::Copilot)
+					.map(|entry| found || entry.is_some())
+			})?
+	};
+	if !uses_bare_map {
+		return serialize_dialect(
+			config,
+			original,
+			"mcpServers",
+			JsonMcpDialect::Copilot,
+		);
+	}
+
+	let synthetic = serde_json::json!({ "mcpServers": original_root });
+	let updated = serialize_dialect(
+		config,
+		Some(&synthetic.to_string()),
+		"mcpServers",
+		JsonMcpDialect::Copilot,
+	)?;
+	let updated_root = parse_root(&updated)?;
+	let servers = server_map(&updated_root, "mcpServers")?
+		.cloned()
+		.unwrap_or_default();
+	aghub_json::patch_jsonc_object(original, &servers)
+		.map_err(|error| ConfigError::InvalidConfig(error.to_string()))
 }
 
 pub fn serialize(
@@ -277,7 +335,11 @@ fn serialize_dialect(
 					if let Some(env) = env {
 						entry.insert("env".into(), serde_json::to_value(env)?);
 					}
-					"stdio"
+					if matches!(dialect, JsonMcpDialect::Copilot) {
+						"local"
+					} else {
+						"stdio"
+					}
 				}
 				McpTransport::Sse { url, headers, .. }
 				| McpTransport::StreamableHttp { url, headers, .. } => {
@@ -295,7 +357,7 @@ fn serialize_dialect(
 					}
 				}
 			};
-			if matches!(dialect, JsonMcpDialect::Standard) {
+			if !matches!(dialect, JsonMcpDialect::Gemini) {
 				if same_transport {
 					if let Some(native_type) = native_type {
 						entry.insert("type".into(), native_type);
@@ -490,6 +552,51 @@ mod tests {
 	}
 
 	#[test]
+	fn copilot_local_transport_round_trips_without_losing_fields() {
+		let original = r#"{
+			"mcpServers": {
+				"filesystem": {
+					"type": "local",
+					"command": "npx",
+					"args": ["@modelcontextprotocol/server-filesystem"],
+					"tools": ["*"]
+				}
+			}
+		}"#;
+		let mut config = parse_copilot(original).unwrap();
+		assert_eq!(config.mcps.len(), 1);
+		config.mcps[0].transport = McpTransport::stdio(
+			"bunx",
+			vec!["@modelcontextprotocol/server-filesystem".to_string()],
+		);
+		let output = serialize_copilot(&config, Some(original)).unwrap();
+		let after: Value = serde_json::from_str(&output).unwrap();
+		assert_eq!(after["mcpServers"]["filesystem"]["type"], "local");
+		assert_eq!(after["mcpServers"]["filesystem"]["command"], "bunx");
+		assert_eq!(after["mcpServers"]["filesystem"]["tools"][0], "*");
+	}
+
+	#[test]
+	fn copilot_bare_project_map_round_trips_in_place() {
+		let original = r#"{
+			"filesystem": {
+				"type": "local",
+				"command": "npx",
+				"tools": ["*"]
+			}
+		}"#;
+		let mut config = parse_copilot(original).unwrap();
+		assert_eq!(config.mcps.len(), 1);
+		config.mcps[0].transport = McpTransport::stdio("bunx", Vec::new());
+
+		let output = serialize_copilot(&config, Some(original)).unwrap();
+		let after: Value = serde_json::from_str(&output).unwrap();
+		assert_eq!(after["filesystem"]["command"], "bunx");
+		assert_eq!(after["filesystem"]["tools"][0], "*");
+		assert!(after.get("mcpServers").is_none());
+	}
+
+	#[test]
 	fn test_parse_sse() {
 		let json = r#"{"mcpServers": {"remote-server": {"type": "sse", "url": "http://localhost:3000/sse", "headers": {"Authorization": "Bearer token"}}}}"#;
 		let config = parse(json, "mcpServers").unwrap();
@@ -574,6 +681,7 @@ mod tests {
 				source_path: None,
 				canonical_path: None,
 				config_source: None,
+				origin: None,
 			}],
 			sub_agents: vec![],
 		};
@@ -595,6 +703,7 @@ mod tests {
 					transport: McpTransport::stdio("echo", vec![]),
 					timeout: None,
 					config_source: None,
+					origin: None,
 				},
 				McpServer {
 					name: "disabled".to_string(),
@@ -603,6 +712,7 @@ mod tests {
 					transport: McpTransport::stdio("echo", vec![]),
 					timeout: None,
 					config_source: None,
+					origin: None,
 				},
 			],
 			skills: vec![],

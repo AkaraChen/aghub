@@ -2,7 +2,9 @@ use crate::{
 	adapters::AgentAdapter,
 	manager::ConfigManager,
 	models::{
-		AgentType, ConfigSource, McpServer, ResourceScope, Skill, SubAgent,
+		AgentType, ConfigSource, McpServer, ResourceOrigin, ResourceScope,
+		ResourceSourceKind, ResourceWritePolicy, RuntimeVisibility, Skill,
+		SubAgent,
 	},
 	registry,
 	skills::{
@@ -116,20 +118,111 @@ fn extend_skill_target_locations(
 	skills: &mut Vec<Skill>,
 	cache: &mut SkillLocationCache,
 ) {
+	let sources = skill_read_sources(target, scope, project_root, source);
+	let roots = sources
+		.iter()
+		.map(|source| source.root.clone())
+		.collect::<Vec<_>>();
+	let discovered = cache.load_for_agent(&roots, target.discovery());
+	let mut loaded = discovered
+		.into_iter()
+		.filter_map(|mut skill| {
+			let source_path = skill.source_path.as_deref()?;
+			let expanded = crate::rules::expand_tilde(source_path);
+			let read_source = sources
+				.iter()
+				.find(|source| expanded.starts_with(&source.root))?;
+			let physical_location =
+				skill.source_path.clone().unwrap_or_else(|| {
+					read_source.root.to_string_lossy().into_owned()
+				});
+			skill.config_source = Some(read_source.scope);
+			skill.origin = Some(ResourceOrigin {
+				product_id: target.id().to_string(),
+				surface_ids: read_source
+					.surface_ids
+					.iter()
+					.map(|id| (*id).to_string())
+					.collect(),
+				scope: read_source.scope,
+				source_kind: read_source.source_kind,
+				physical_location: Some(physical_location),
+				precedence: read_source.precedence,
+				write_policy: read_source.write_policy,
+				runtime_visibility: read_source.runtime_visibility,
+				runtime_visibility_evidence: Some(
+					read_source.runtime_visibility_evidence.to_string(),
+				),
+			});
+			Some(skill)
+		})
+		.collect::<Vec<_>>();
+	let mut physical_locations = std::collections::HashSet::new();
+	loaded.retain(|skill| {
+		let Some(path) = skill.source_path.as_deref() else {
+			return true;
+		};
+		let path = crate::rules::expand_tilde(path);
+		let identity = std::fs::canonicalize(&path).unwrap_or(path);
+		physical_locations.insert(identity)
+	});
 	if matches!(target, SkillTarget::Agent(_)) {
-		let universal_path =
-			SkillTarget::Universal.write_path(scope, project_root);
-		if universal_path.is_some()
-			&& target.write_path(scope, project_root) == universal_path
-		{
-			return;
+		let universal_root = match scope {
+			ResourceScope::GlobalOnly => {
+				aghub_agents::descriptor::get_universal_skills_path()
+			}
+			ResourceScope::ProjectOnly => project_root.map(
+				aghub_agents::descriptor::get_universal_project_skills_path,
+			),
+			ResourceScope::Both => None,
+		};
+		loaded.retain(|skill| {
+			let path =
+				skill.source_path.as_deref().map(crate::rules::expand_tilde);
+			!path.is_some_and(|path| {
+				universal_root
+					.as_ref()
+					.is_some_and(|root| path.starts_with(root))
+			})
+		});
+	}
+	skills.extend(loaded);
+}
+
+fn skill_read_sources(
+	target: SkillTarget,
+	scope: ResourceScope,
+	project_root: Option<&Path>,
+	config_source: ConfigSource,
+) -> Vec<aghub_agents::SkillReadSource> {
+	match target {
+		SkillTarget::Agent(agent) => {
+			registry::get(agent).skill_read_sources(project_root, scope)
+		}
+		SkillTarget::Universal => {
+			let write_path = target.write_path(scope, project_root);
+			target
+				.read_paths(scope, project_root)
+				.into_iter()
+				.enumerate()
+				.map(|(precedence, root)| aghub_agents::SkillReadSource {
+					write_policy: if write_path.as_ref() == Some(&root) {
+						ResourceWritePolicy::ReadWrite
+					} else {
+						ResourceWritePolicy::ReadOnly
+					},
+					root,
+					surface_ids: vec!["standard"],
+					scope: config_source,
+					source_kind: ResourceSourceKind::Standard,
+					precedence,
+					runtime_visibility: RuntimeVisibility::Visible,
+					runtime_visibility_evidence:
+						"declared by the Agent Skills standard",
+				})
+				.collect()
 		}
 	}
-	let paths = target.read_paths(scope, project_root);
-	skills.extend(cache.load(&paths).into_iter().map(|mut skill| {
-		skill.config_source = Some(source);
-		skill
-	}));
 }
 
 /// Load resources for all registered agents.
@@ -232,6 +325,116 @@ pub fn load_all_agents(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::models::{ResourceSourceKind, ResourceWritePolicy};
+
+	fn write_skill(root: &Path, name: &str) {
+		let skill = root.join(name);
+		std::fs::create_dir_all(&skill).unwrap();
+		std::fs::write(
+			skill.join("SKILL.md"),
+			format!("---\nname: {name}\ndescription: Test\n---\n"),
+		)
+		.unwrap();
+	}
+
+	fn write_sub_agent(root: &Path, name: &str) {
+		std::fs::create_dir_all(root).unwrap();
+		std::fs::write(
+			root.join(format!("{name}.md")),
+			format!("---\nname: {name}\ndescription: Test\n---\nBody"),
+		)
+		.unwrap();
+	}
+
+	#[test]
+	fn skill_locations_keep_product_specific_source_ownership() {
+		let temp = tempfile::tempdir().unwrap();
+		let project_root = temp.path();
+		for (root, name) in [
+			(project_root.join(".cursor/skills"), "native"),
+			(project_root.join(".agents/skills"), "standard"),
+			(project_root.join(".claude/skills"), "compatible"),
+		] {
+			write_skill(&root, name);
+		}
+
+		let locations = load_all_skill_target_locations(
+			ResourceScope::ProjectOnly,
+			Some(project_root),
+		);
+		let cursor = locations
+			.iter()
+			.find(|locations| locations.target_id == "cursor")
+			.unwrap();
+		let native = cursor
+			.skills
+			.iter()
+			.find(|skill| skill.name == "native")
+			.and_then(|skill| skill.origin.as_ref())
+			.unwrap();
+		let compatible = cursor
+			.skills
+			.iter()
+			.find(|skill| skill.name == "compatible")
+			.and_then(|skill| skill.origin.as_ref())
+			.unwrap();
+
+		assert_eq!(native.product_id, "cursor");
+		assert_eq!(native.surface_ids, ["ide", "cli", "cloud"]);
+		assert_eq!(native.source_kind, ResourceSourceKind::Native);
+		assert_eq!(native.write_policy, ResourceWritePolicy::ReadWrite);
+		assert_eq!(compatible.source_kind, ResourceSourceKind::Compatible);
+		assert_eq!(compatible.write_policy, ResourceWritePolicy::ReadOnly);
+		assert!(native.precedence < compatible.precedence);
+		assert!(!cursor.skills.iter().any(|skill| skill.name == "standard"));
+
+		let universal = locations
+			.iter()
+			.find(|locations| locations.target_id == "universal")
+			.unwrap();
+		let standard = universal
+			.skills
+			.iter()
+			.find(|skill| skill.name == "standard")
+			.and_then(|skill| skill.origin.as_ref())
+			.unwrap();
+		assert_eq!(standard.product_id, "universal");
+		assert_eq!(standard.source_kind, ResourceSourceKind::Standard);
+		assert_eq!(standard.write_policy, ResourceWritePolicy::ReadWrite);
+	}
+
+	#[test]
+	fn cursor_sub_agents_keep_native_and_compatible_origins() {
+		let temp = tempfile::tempdir().unwrap();
+		write_sub_agent(&temp.path().join(".cursor/agents"), "native");
+		write_sub_agent(&temp.path().join(".claude/agents"), "compatible");
+		let descriptor = registry::get(AgentType::Cursor);
+
+		let agents = AgentAdapter::load_sub_agents(
+			&descriptor,
+			Some(temp.path()),
+			ResourceScope::ProjectOnly,
+		)
+		.unwrap();
+
+		let native = agents
+			.iter()
+			.find(|agent| agent.name == "native")
+			.and_then(|agent| agent.origin.as_ref())
+			.unwrap();
+		let compatible = agents
+			.iter()
+			.find(|agent| agent.name == "compatible")
+			.and_then(|agent| agent.origin.as_ref())
+			.unwrap();
+		assert_eq!(native.product_id, "cursor");
+		assert_eq!(native.surface_ids, ["ide", "cli", "cloud"]);
+		assert_eq!(native.source_kind, ResourceSourceKind::Native);
+		assert_eq!(native.write_policy, ResourceWritePolicy::ReadWrite);
+		assert_eq!(compatible.source_kind, ResourceSourceKind::Compatible);
+		assert_eq!(compatible.write_policy, ResourceWritePolicy::ReadOnly);
+		assert!(native.precedence < compatible.precedence);
+	}
 
 	#[cfg(unix)]
 	#[test]

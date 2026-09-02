@@ -1246,9 +1246,10 @@ test("Agents panel lets Card variants own static surfaces", async ({
 }) => {
 	await page.goto("/settings?tab=agents");
 
-	const panel = page.locator('[data-slot="tabs-panel"]');
-	const outerCard = panel.locator(":scope > div > .card--default");
+	const yourAgents = page.getByRole("region", { name: "Your Agents" });
+	const outerCard = yourAgents.locator(":scope > .card--default");
 	const agentCard = outerCard.locator(".card--secondary").first();
+	await expect(yourAgents).toBeVisible();
 	await expect(outerCard).toBeVisible();
 	await expect(agentCard).toBeVisible();
 	await expect(

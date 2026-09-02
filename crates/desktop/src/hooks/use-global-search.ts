@@ -61,8 +61,7 @@ export function useGlobalSearch({
 	const { availableAgents } = useAgentAvailability();
 
 	const installedAgents = useMemo(
-		() =>
-			availableAgents.filter((agent) => agent.availability.is_available),
+		() => availableAgents.filter((agent) => agent.isDetected),
 		[availableAgents],
 	);
 
