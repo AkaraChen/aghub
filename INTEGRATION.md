@@ -1,5 +1,59 @@
 # Integration record
 
+## 2026-09-15 — CLI selection blocks the next validation pass
+
+- Main: `72f296f0317a405f96a163246eebdc77d74c668d`.
+- Candidate: `task/foundation-codex-judge` at
+  `0b8cd70ff3c25bf4a301ffc5fcc5393d3033d598`.
+- Explicit main/task fetch succeeded; this remained the only unmerged
+  task branch. There were no duplicate issue branches to supersede.
+- Disposition: **not merged — missing proof**. No Cargo invocation ran
+  in this pass. The current LoopX CLI rejected delivery through its
+  selection contract; this is not a Rust build or test failure.
+- Existing compile cache and runtime installation were left intact.
+
+The initial guard and its exact selection follow-up both returned:
+
+```text
+ok=true
+interaction_contract.agent_channel.must_attempt=true
+interaction_contract.agent_channel.delivery_allowed=false
+interaction_contract.cli_channel.selection_required=true
+```
+
+Executed selection command (same Turn identity as the initial guard):
+
+```sh
+loopx --format json quota should-run --goal-id aghub-goal \
+  --todo-id todo_78e9885160c8 --agent-id codex-judge \
+  --runtime-profile codex_cli --turn-instance-id 2026-09-15T06:32:56Z
+```
+
+`loopx doctor` reported `ok=True`, distribution version `1.0.3`, and
+TypeScript runtime `ready`. Inspecting the installed Python command found
+that `_requested_quota_action_todo_id` admits only the profiles in
+`GUIDED_START_TURN_RUNTIME_PROFILES` (App heartbeat and App SSH). The
+generated `codex_cli` selection command therefore discards `--todo-id`.
+A read-only direct call of that function produced:
+
+```text
+codex_cli: requested_todo_id=None
+codex_app_ssh_goal: requested_todo_id='todo_78e9885160c8'
+codex_app_heartbeat: requested_todo_id='todo_78e9885160c8'
+```
+
+This diagnoses argument handling; it does not prove a runtime repair.
+Do not impersonate another host profile or alter a persisted guard receipt.
+Repair the CLI selection path for caller-owned Turn identities, with a
+regression covering the real generated command and receipt binding. Then
+verify `selection_required=false` and `delivery_allowed=true` before
+resuming the preserved single-job workspace command below. Do not broaden
+the separate `--begin-turn` profile set as a side effect.
+
+The foundation Todo remains open with this continuation. This pass records
+only diagnostic evidence and spends no delivery quota. The clean-clone,
+full workspace, desktop and platform acceptance proofs remain missing.
+
 ## 2026-09-15 — foundation validation
 
 - Main: `72f296f0317a405f96a163246eebdc77d74c668d`.

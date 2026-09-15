@@ -120,6 +120,14 @@ changed for these attempts.
 
 ## Integration retry — 2026-09-15
 
+The subsequent pass at foundation commit
+`0b8cd70ff3c25bf4a301ffc5fcc5393d3033d598` did not start Cargo: LoopX
+1.0.3 generated a `codex_cli` selection command but ignored its requested
+Todo, leaving delivery prohibited. See the latest `INTEGRATION.md` entry
+for the actual command, output and isolated argument-handling reproduction.
+Repair and verify the CLI selection contract before resuming the command
+below. The prior compilation attempts remain incomplete evidence.
+
 The judge retried the full workspace on the foundation branch at
 `3a6c70998472db3752b70a0401fac744dfcffd4c`, using a disk-backed worktree.
 Rust source and tests matched the recorded main baseline; the branch
