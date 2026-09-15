@@ -1,5 +1,47 @@
 # Integration record
 
+## 2026-09-15 — #436 follow-up integrated; #336 advanced after validation
+
+| Candidate | Tested commit | Workspace result | Elapsed | Disposition |
+| --- | --- | --- | --- | --- |
+| #436 | `4b1ad9deddaf782ceea4c725b5054400291d44c9` | exit 0 | 242.50 s | Merged and pushed as `93ea6f8e` |
+| #336 | `a14ff6ef016d87f3b55dfa16030797e3fa5c7703` | exit 0 | 284.39 s | Old tip passed; new `4ca84113` awaits full validation |
+| #335 | `767b0cb740316c03b16da1731cdd435215f63e9c` | exit 101 | 147.37 s | Rejected; compilation error below |
+
+All three runs used the full workspace command and environment documented
+below. #436 preserves repo-root `.codex/skills` as a legacy read location;
+project writes remain `.agents/skills`. The merge tree equaled the tested
+tree. Push reported `2faee315..93ea6f8e HEAD -> main`; remote readback was
+`93ea6f8ee4bb80cfa3e3fcfcd39d8111d36f5d5d`.
+
+The canonical worktree already owns local `main`. The judge therefore
+created the no-fast-forward merge from detached `origin/main` in its own
+worktree and pushed `HEAD:main`, without moving another worker's checkout.
+
+#336 additionally passed `AGHUB_SKIP_SIDECAR=1 bun run typecheck` and
+`AGHUB_SKIP_SIDECAR=1 bun run test:unit` in a clean worktree pinned to
+`a14ff6ef`, with both lockfiles installed using Bun's frozen-lockfile mode.
+Actual frontend unit output:
+
+```text
+ Test Files  24 passed (24)
+      Tests  133 passed (133)
+   Duration  12.02s
+```
+
+The final fetch found `4ca84113`, adding an optional API-server omission
+to the Playwright configuration. It was not the tested revision, so #336
+was not merged. This flag does not replace the complete workspace command
+or prove the real API/WebView path. Next pass must validate the new tip,
+check the automatic scan and credential-prefill browser cases, and test
+its combination with current main before integration. Native interaction
+and visual acceptance remain missing proof.
+
+The foundation branch now incorporates the validated `93ea6f8e` main.
+Its final documentation tip still requires its own full workspace run
+before merge; the final result and merge identity belong in the LoopX
+checkpoint receipt. This entry does not predeclare that result.
+
 ## 2026-09-15 — clean baseline passes; #335 rejection reproduced
 
 The clean clone at `72f296f0317a405f96a163246eebdc77d74c668d`
