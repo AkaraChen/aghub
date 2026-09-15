@@ -1,5 +1,166 @@
 # Integration record
 
+## 2026-09-15 — current integration pass and settlement diagnosis
+
+This pass pins #335 `767b0cb740316c03b16da1731cdd435215f63e9c`
+and #336 `4ca84113e5054e38e2ee3d8d38c1c2187864ee06`.
+There are no duplicate issue branches in this snapshot.
+
+#335 failed the complete workspace command: **exit 101 in 583.94 s**.
+The checkout was clean before and after the run. It is not merged.
+Command, including the memory-constrained build profile:
+
+```sh
+export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/.local/share/fnm/node-versions/v24.20.0/installation/bin:$PATH"
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 \
+  CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 \
+  CARGO_TARGET_DIR="$PWD/target" cargo test --workspace
+```
+
+First failure excerpt (the complete diagnostic is shorter than 40 lines):
+
+```text
+error[E0277]: `error::ApiError` doesn't implement `std::fmt::Debug`
+    --> crates/api/src/routes/skills.rs:4292:38
+     |
+4292 |             skill_directory_hash(&source_dir).unwrap()
+     |                                               ^^^^^^ unsatisfied trait bound
+     |
+help: the trait `std::fmt::Debug` is not implemented for `error::ApiError`
+    --> crates/api/src/error.rs:15:1
+     |
+  15 | pub struct ApiError {
+     | ^^^^^^^^^^^^^^^^^^^
+     = note: add `#[derive(Debug)]` to `error::ApiError` or manually `impl std::fmt::Debug for error::ApiError`
+note: required by a bound in `Result::<T, E>::unwrap`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/result.rs:1227:4
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `aghub-api` (lib test) due to 1 previous error
+```
+
+The judge attempted the corresponding Todo note using its own identity.
+LoopX rejected it because `todo_25a708f3ff3d` belongs to
+`grok-worker-2`. The rejection and failure will also be retained in the
+judge-owned foundation continuation. No peer identity or source was changed.
+
+### #336 full workspace result
+
+The exact current candidate `4ca84113` completed the same full workspace
+command above with **exit 0 in 291.76 s**. The failing-test set is empty
+for this Rust run. The runner verified a clean checkout before and after.
+Selected actual output:
+
+```text
+test result: ok. 94 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.92s
+```
+
+A final fetch confirmed main remained `2047509c`, #335 remained
+`767b0cb7`, and #336 remained `4ca84113`. **Neither candidate was merged**:
+#335 does not compile; #336 still fails the browser regression gate below.
+No main push occurred. This report is a foundation-branch artifact and
+does not claim a new full workspace pass for the report commit itself.
+
+### #336 browser regression gate
+
+On exact `4ca84113`, these commands passed in a separate clean checkout:
+
+```sh
+export PATH="$HOME/.bun/bin:$PATH"
+AGHUB_SKIP_SIDECAR=1 bun run typecheck
+AGHUB_SKIP_SIDECAR=1 bun run test:unit
+```
+
+Actual unit output:
+
+```text
+ Test Files  24 passed (24)
+      Tests  133 passed (133)
+   Duration  6.71s
+```
+
+The focused Chromium run completed with **exit 1**:
+
+```sh
+AGHUB_SKIP_SIDECAR=1 AGHUB_E2E_SKIP_API=1 \
+  AGHUB_E2E_PORT=1438 AGHUB_E2E_API_PORT=46018 \
+  bun run test:e2e e2e/list-interactions.spec.ts e2e/skill-audit.spec.ts \
+  --grep "updating a|resetting a Git scan|switching branches" --workers=1
+```
+
+```text
+  2 failed
+    [chromium] › e2e/skill-audit.spec.ts:484:1 › resetting a Git scan discards its late response
+    [chromium] › e2e/skill-audit.spec.ts:590:1 › switching branches discards the previous audit and session
+  2 passed (1.6m)
+error: script "test:e2e" exited with code 1
+```
+
+Both new update-source cases pass: automatic scan/re-import and stored
+credential prefill. The existing isolation tests fail before reaching
+their isolation assertions: line 517 waits on a disabled Scan button
+while automatic scan is pending; line 649 attempts to click Scan after
+automatic scan folds the repository card. The branch updated the
+list-interactions trigger but left these skill-audit triggers unchanged.
+The owner must adapt the trigger/waits and preserve the existing late
+response, audit, and session assertions. **Hold integration** until this
+regression gate passes; a Rust pass alone does not validate these flows.
+
+Code review also identifies an unproven session-cache edge to exercise:
+`import-github-skill-panel.tsx:337` caches by URL/branch/credential and
+line 356 applies cached session data, while `git_scan_skills` consumes the
+old session on rescan. Verify branch round trips and reopening after
+install cannot reuse a consumed session, including delayed requests.
+This is a review concern, not a claimed reproduced product failure.
+
+These tests use mocked APIs. `AGHUB_E2E_SKIP_API=1` omits only the real
+API server process for these mock suites; no test definition was removed
+or marked skipped. Native WebView, real API/keychain, sidecar and platform
+acceptance remain missing proof.
+
+An earlier wider 76-case browser run was interrupted to relieve observed
+memory pressure. Its actual summary was `6 failed`, `1 interrupted`,
+`57 did not run`, `12 passed (7.7m)`, exit 130. An overlapping four-case
+attempt timed out all four. These are retained as incomplete/failed
+attempts, not passes or attributed product regressions. The focused
+2-pass/2-fail run above occurred after the wide browser process stopped.
+
+The corresponding #336 Todo note was attempted with judge identity;
+LoopX rejected this peer-owned mutation as it did for #335. Both review
+findings remain in the judge-owned continuation and this public report.
+
+### P0 completion remains blocked in LoopX
+
+The published clean baseline and foundation receipts remain valid:
+`72f296f0` passed in 555.44 s; `fbce428b` passed in 99.31 s and is
+included in main `2047509c`. Those results were read back from the
+recorded runner receipts. They are not new test runs in this pass.
+
+The installed LoopX 1.0.3 completion path rejects completion before
+accountable refresh and spend; its accountable-refresh path rejects the
+same open Todo until completion validation durably completes it.
+Both commands used the same current Turn and `codex-judge` identity.
+Actual diagnostic outputs:
+
+```text
+turn-scoped advancement completion requires matching writeback and quota spend receipts: matching accountable refresh-state receipt is missing for the original settlement identity
+accountable refresh is blocked until controller-declared completion validation durably completes todo todo_78e9885160c8
+```
+
+A final structured blocked refresh (`outcome_gap`,
+`progress-result-class=blocked`, blocker `completion-refresh-ordering`)
+was accepted with `appended=true` and a satisfied vision checkpoint.
+The following spend command still returned `ok=false`, `appended=false`:
+
+```text
+quota spend is blocked until controller-declared completion validation durably completes todo todo_78e9885160c8
+```
+
+This remains a runtime settlement blocker. P0 is not declared done,
+and no quota spend receipt is fabricated. Preserve the validation
+requirement while repairing this completion/refresh ordering contract.
+
+
 ## 2026-09-15 — #436 follow-up integrated; #336 advanced after validation
 
 | Candidate | Tested commit | Workspace result | Elapsed | Disposition |
