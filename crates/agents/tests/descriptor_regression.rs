@@ -937,7 +937,7 @@ fn test_project_skill_paths() {
 
 	let expected: [(AgentType, Option<&[&str]>); 22] = [
 		(AgentType::Claude, Some(&[".claude/skills"])),
-		(AgentType::Codex, Some(&[".agents/skills"])),
+		(AgentType::Codex, Some(&[".agents/skills", ".codex/skills"])),
 		(AgentType::Openclaw, None), // Openclaw has no project skills
 		(
 			AgentType::OpenCode,
