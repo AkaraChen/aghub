@@ -209,23 +209,36 @@ for late scan results after reset. The results above apply only to
 `deed6e0b`; the new revision still needs its own full workspace and
 browser validation. No #336 revision was merged in this pass.
 
-### Continuation: foundation still running
+### Foundation passed and integrated
 
-The serial runner has moved to foundation
-`9ea96f2753e3eeab039d24f9e725daaa1f10db92`, started at
-`2026-09-15T13:37:22Z`. Its full-workspace command has no final result
-yet. Keep the integration Todo open and read the existing queue result
-before any checkout or new build. The local process/result locations
-are in the Todo note. No candidate was merged and main was not pushed.
+Foundation at revision 9ea96f2753e3eeab039d24f9e725daaa1f10db92
+completed the same full-workspace command with **exit 0 in 1489.79 s**.
+The runner checked the pinned detached revision and clean Git status
+before and after. All workspace targets and doc tests completed.
+Representative actual output:
 
-This report is pushed to the existing foundation task branch; its new
-documentation tip must not inherit the older candidate's test result.
-After the running command ends, record its exact exit and duration,
-validate the final report tip, and merge only an eligible tested tree.
-Native WebView, desktop visual acceptance, Windows/macOS and real
-sidecar behavior remain **missing proof**. This is an incomplete
-integration slice, not completed product or foundation acceptance.
+~~~text
+test result: ok. 327 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.18s
+~~~
 
+The ignored case predates this pass; no tests were skipped or weakened.
+After fetching main again, the judge merged the tested foundation
+revision without fast-forward. The merge tree equals the tested tree.
+Push to main succeeded at 572a06439fa9021ac765591cf8c0c97d0268d783.
+Local main belongs to the canonical worktree, so this integration used
+the judge's detached checkout and an explicit HEAD:main push.
+
+The serial queue is finished; there is no ongoing foundation compiler
+to resume. The newer documentation report tip needs its own full run
+before any further merge. The new #336 revision 38d9a73a remains an
+independent validation follow-up. #335 still needs its compile fix.
+Neither feature branch was merged.
+
+Both corresponding worker Todo note writes were rejected by LoopX's
+peer ownership guard. The judge Todo holds both results and the report
+link without changing worker ownership. Native WebView, desktop visual
+acceptance, Windows/macOS and real sidecar behavior remain **missing
+proof**. The passing foundation run does not close these gaps.
 
 ## 2026-09-15 — clean foundation merged; P0 settlement blocked
 
