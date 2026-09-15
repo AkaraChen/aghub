@@ -1,5 +1,96 @@
 # Integration record
 
+## 2026-09-15 — current #436 passes; current #335 fails
+
+The serial queue produced fresh, clean-worktree results for the current
+remote task tips. This supersedes the earlier missing-current-tip proof.
+It does not erase historical failures or invalidated attempts.
+
+| Candidate | Commit | Workspace exit | Elapsed | Disposition |
+| --- | --- | --- | --- | --- |
+| #436 | `e14d327257e56b3ec76bd9ea0bf8f2be788d3eed` | 0 | 213.87 s | Merged as `2faee315` |
+| #335 | `767b0cb740316c03b16da1731cdd435215f63e9c` | 101 | 433.02 s | Rejected; API test target fails to compile |
+
+#436 was merged with `git merge --no-ff` and pushed to main as
+`2faee3156b8eeebadd53784530032a768934c772`. Main and the task tip were
+fetched again immediately before the merge. The merge tree was checked
+to be byte-for-byte identical to the tested task tree. The local `main`
+branch is held by the canonical worktree, so this judge used detached
+`origin/main` and pushed the verified merge with `git push origin HEAD:main`.
+The push returned `72f296f0..2faee315 HEAD -> main`.
+
+Review found no changed workflow, removed test, relaxed error fallback,
+or added ignored case. Project skill writes now use `.agents/skills`;
+user reads prioritize `~/.agents/skills`, while global writes deliberately
+remain `~/.codex/skills`. The no-project-write rejection tests now use
+Openclaw, which still lacks that target, and keep the 422 assertions.
+This merges the validated implementation slice without closing the
+broader #436 runtime acceptance in the worker-owned Todo.
+
+Both ran the complete command with no test filtering:
+
+```sh
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 \
+  CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 \
+  CARGO_TARGET_DIR="$PWD/target" cargo test --workspace
+```
+
+The runner verified each pinned revision and clean worktree before and
+after execution. #436 completed workspace binaries and doc tests;
+its API suite reported 327 passed, 0 failed, 1 ignored, and usage reported
+94 passed, 0 failed. Ignored cases already existed on main; none were
+added by the candidate or the judge. Native desktop, live Codex discovery
+and the real ccusage sidecar are still separate missing proof.
+
+### #335: first 40 failure lines
+
+The complete diagnostic is shorter than 40 lines:
+
+```text
+error[E0277]: `error::ApiError` doesn't implement `std::fmt::Debug`
+    --> crates/api/src/routes/skills.rs:4292:38
+     |
+4292 |             skill_directory_hash(&source_dir).unwrap()
+     |                                               ^^^^^^ unsatisfied trait bound
+     |
+help: the trait `std::fmt::Debug` is not implemented for `error::ApiError`
+    --> crates/api/src/error.rs:15:1
+     |
+  15 | pub struct ApiError {
+     | ^^^^^^^^^^^^^^^^^^^
+     = note: add `#[derive(Debug)]` to `error::ApiError` or manually `impl std::fmt::Debug for error::ApiError`
+note: required by a bound in `Result::<T, E>::unwrap`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/result.rs:1227:4
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `aghub-api` (lib test) due to 1 previous error
+```
+
+The required `todo update --agent-id codex-judge` was attempted for
+`todo_25a708f3ff3d`. LoopX rejected the cross-peer mutation because the
+Todo belongs to `grok-worker-2`. The judge-owned foundation Todo carries
+this integration finding; the worker must repair its own branch and
+update its task. No peer source or test assertion was changed by judge.
+
+### Foundation remains unmerged
+
+The same full workspace command on foundation
+`6be0fc59726bdb4446ac093e005f8a751e666ed1` exited **101** after
+**231.19 seconds**. Desktop `rustc` was killed by signal 9 before tests.
+This is a compiler-process termination, not a reported assertion failure;
+this log alone does not identify who sent the signal. The builder was
+also running peer compilation. Do not relabel this result as a pass.
+
+The first failure lines follow, with local workspace/toolchain roots
+redacted. There are fewer than 40 lines:
+
+```text
+error: could not compile `aghub` (lib)
+
+Caused by:
+  process didn't exit successfully: `<rustup-home>/toolchains/1.97.1-x86_64-unknown-linux-gnu/bin/rustc --crate-name aghub_desktop_lib --edition=2021 crates/desktop/src-tauri/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type staticlib --crate-type cdylib --crate-type rlib --emit=dep-info,link -C embed-bitcode=no --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=281399dcc2861091 --out-dir <judge-worktree>/target/debug/deps -C incremental=<judge-worktree>/target/debug/incremental -C strip=debuginfo -L dependency=<judge-worktree>/target/debug/deps --extern aghub_api=<judge-worktree>/target/debug/deps/libaghub_api-d89fca207b97d5f2.rlib --extern aghub_core=<judge-worktree>/target/debug/deps/libaghub_core-b0489d8adcb921c7.rlib --extern fix_path_env=<judge-worktree>/target/debug/deps/libfix_path_env-f2acc0ae1793f2c4.rlib --extern log=<judge-worktree>/target/debug/deps/liblog-0d09545a97287e0b.rlib --extern posthog_rs=<judge-worktree>/target/debug/deps/libposthog_rs-add2dbbf93d84cf0.rlib --extern reqwest=<judge-worktree>/target/debug/deps/libreqwest-4af7f1cc86f43745.rlib --extern semver=<judge-worktree>/target/debug/deps/libsemver-2794c824dcad1ccc.rlib --extern serde=<judge-worktree>/target/debug/deps/libserde-dc00d36d053e7811.rlib --extern serde_json=<judge-worktree>/target/debug/deps/libserde_json-b8117fc31197a4c0.rlib --extern sys_locale=<judge-worktree>/target/debug/deps/libsys_locale-a7fef47531b37535.rlib --extern tauri=<judge-worktree>/target/debug/deps/libtauri-3024df871c9f13f0.rlib --extern tauri_plugin_autostart=<judge-worktree>/target/debug/deps/libtauri_plugin_autostart-41d17756bcf70a25.rlib --extern tauri_plugin_clipboard_manager=<judge-worktree>/target/debug/deps/libtauri_plugin_clipboard_manager-085d4a22b2fd544e.rlib --extern tauri_plugin_deep_link=<judge-worktree>/target/debug/deps/libtauri_plugin_deep_link-3c648c1f7873d584.rlib --extern tauri_plugin_dialog=<judge-worktree>/target/debug/deps/libtauri_plugin_dialog-66ceb114aa8e69c4.rlib --extern tauri_plugin_fs=<judge-worktree>/target/debug/deps/libtauri_plugin_fs-76cd3a8ebebbd007.rlib --extern tauri_plugin_log=<judge-worktree>/target/debug/deps/libtauri_plugin_log-987e5358ea47fdbf.rlib --extern tauri_plugin_opener=<judge-worktree>/target/debug/deps/libtauri_plugin_opener-a4f54e712fedea49.rlib --extern tauri_plugin_process=<judge-worktree>/target/debug/deps/libtauri_plugin_process-c4bca79a4ee10397.rlib --extern tauri_plugin_single_instance=<judge-worktree>/target/debug/deps/libtauri_plugin_single_instance-6109bbaa62981e29.rlib --extern tauri_plugin_store=<judge-worktree>/target/debug/deps/libtauri_plugin_store-0a402ef676592ef8.rlib --extern tauri_plugin_updater=<judge-worktree>/target/debug/deps/libtauri_plugin_updater-fff07ed8f76233d4.rlib --extern thiserror=<judge-worktree>/target/debug/deps/libthiserror-4956b21161e0307f.rlib --extern time=<judge-worktree>/target/debug/deps/libtime-438475701cd3eb20.rlib --extern tokio=<judge-worktree>/target/debug/deps/libtokio-71f650b4712edd73.rlib --extern uuid=<judge-worktree>/target/debug/deps/libuuid-e546abd925526cfb.rlib --extern zip=<judge-worktree>/target/debug/deps/libzip-4a3e211d8dbc0d0d.rlib -L native=<judge-worktree>/target/debug/build/aws-lc-sys-1818b2b108452816/out -L native=<judge-worktree>/target/debug/build/ring-dae84e5da64fefb2/out -L native=<judge-worktree>/target/debug/build/zstd-sys-398360a66b326e90/out -L native=<judge-worktree>/target/debug/build/libsqlite3-sys-44c49cabba7723b6/out -L native=<judge-worktree>/target/debug/build/wasmtime-3044dfac06b76f96/out -L native=/usr/lib/x86_64-linux-gnu --cfg desktop --cfg dev --check-cfg 'cfg(desktop)' --check-cfg 'cfg(mobile)' --check-cfg 'cfg(dev)'` (signal: 9, SIGKILL: kill)
+```
+
 ## 2026-09-15 — #335 compiler error and queue interruption
 
 **Not merged.** The #335 run at `49deb6c6a82b8a54fb486f915c96fef492f75bd2`
