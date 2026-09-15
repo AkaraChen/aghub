@@ -62,7 +62,12 @@ does not validate ccusage execution or a distributable desktop bundle.
 
 ## Baseline evidence
 
-Validation is in progress. No passing baseline is claimed.
+**Baseline failed during compilation; no passing baseline is claimed.**
+
+| Attempt | Command | Elapsed | Result |
+| --- | --- | --- | --- |
+| Initial tmpfs clone | `AGHUB_SKIP_SIDECAR=1 cargo test --workspace` | 123.93 s | Interrupted with SIGINT; subprocess return code `-2` |
+| Disk-backed clone | `CARGO_BUILD_JOBS=2 AGHUB_SKIP_SIDECAR=1 cargo test --workspace` | 541.45 s | Cargo exit `101`; compiler killed by signal 9 |
 
 The initial command was `AGHUB_SKIP_SIDECAR=1 cargo test --workspace`.
 It was interrupted with SIGINT after **123.93 seconds** when the clone
@@ -70,6 +75,32 @@ was found to be on tmpfs and available machine memory was about 1.1 GiB.
 The subprocess return code was `-2`; no test result was produced.
 The clean source clone was then moved onto disk and the same workspace
 command restarted with `CARGO_BUILD_JOBS=2`.
+
+The second run produced these exact diagnostic lines:
+
+```text
+sccache: Compiler killed by signal 9
+error: could not compile `cranelift-codegen` (lib)
+```
+
+Cargo also reported the compiler-wrapper exit status as `254` and printed:
+
+```text
+warning: build failed, waiting for other jobs to finish...
+```
+
+The failing dependency is `cranelift-codegen 0.130.2`. No test binaries ran,
+so the failing-test set is **not measured**, rather than empty or passing.
+The source worktree remained clean after the failed run. Memory pressure
+is a plausible cause of signal 9 on this shared builder, but the compiler
+diagnostic alone does not establish an OOM kill.
+
+The checkpoint remains open. The next attempt should reuse the disk-backed
+clone and cached artifacts, reduce `CARGO_BUILD_JOBS` to `1`, and run the
+same full workspace command when adequate memory is available. If it still
+fails, record the new failure before proposing changes to the build
+profile or builder resources. No tests, assertions, or workflows were
+changed for these attempts.
 
 ## Integration decision
 
