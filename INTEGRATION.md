@@ -1,5 +1,71 @@
 # Integration record
 
+## 2026-09-15 — acceptance boundaries and updated candidate review
+
+Observed at `2026-09-15T10:08:31.420370+00:00`. **No branch merged.**
+The inherited serial full workspace queue is still running
+`436-2fa95786`; its supervisor and Cargo process both exist, and it has
+0 completed candidate results. No additional Cargo process was
+started in this pass. The tested worktree and queue plan were preserved.
+
+The queue runs `cargo test --workspace` with `AGHUB_SKIP_SIDECAR=1`,
+`CARGO_BUILD_JOBS=1`, `RUSTC_WRAPPER=`, `CARGO_PROFILE_DEV_DEBUG=0`,
+`CARGO_PROFILE_TEST_DEBUG=0`, and the shared judge target directory.
+Current compile output is not a pass; final elapsed time, exit status
+and failing-test set remain unmeasured.
+
+An explicit task-head fetch found:
+
+| Branch | Fetched revision | Decision |
+| --- | --- | --- |
+| `task/436-grok-worker-1` | `e14d327257e56b3ec76bd9ea0bf8f2be788d3eed` | Validate this tip after the pinned queue; older `2fa95786` cannot authorize it |
+| `task/335-grok-worker-2` | `767b0cb740316c03b16da1731cdd435215f63e9c` | Hash-error finding addressed in code; new regression still unexecuted by judge |
+| `task/foundation-codex-judge` | `a5515364634a8548c5ac5f5b820eb970c349be03` before this documentation update | Final documentation tip also needs the workspace gate |
+
+#335 now propagates `skill_directory_hash(&dest_root)?` before replacement
+and adds `git_install_preserves_dest_when_hash_exceeds_snapshot_limit`.
+The regression checks the hash error and preservation of both installed
+Skill text and the oversized file. This is code-review readback, not
+runtime proof. It supersedes the earlier report's open code finding;
+validation remains missing. #436's newer tip normalizes path separators
+in the API assertion. Neither update is in the running queue's pinned
+candidates. No peer code was edited and no duplicate issue branch exists.
+
+### Headless acceptance checkpoint
+
+[The boundary table](docs/headless-validation-boundaries.md) covers all
+14 issue-backed LoopX tasks and separately records PR #459. Closed GitHub
+items were retained because their LoopX acceptance remains open. The table
+separates Rust fixtures, browser mocks, agent execution, native platform
+checks and product decisions. Source-reference validation caught and
+corrected a stale `codex.rs` citation to the actual `codex/mod.rs`.
+
+The inventory check compared table row IDs against active LoopX checkboxes
+and checked local document links and cited source paths:
+
+```text
+PASS matrix coverage: 14/14 LoopX issue-backed tasks; PR 459 separately documented
+PASS local document links and source paths resolve
+```
+
+This validates the document, not the listed feature behavior. The full
+workspace and clean-clone baseline remain missing proof, as do Windows,
+macOS, DMG installation and real ccusage execution. #38/#41 still need a
+concrete proposal and operator decision before implementation.
+
+### Evidence-linked continuation
+
+Considered paths: baseline/integration validation, the P0 headless boundary
+table, and P2 backup/cloud design. Baseline evidence is the bottleneck and
+continues in the serial queue. The boundary table supplies its acceptance
+plan without another compiler workload. P2 remains in existing Todos.
+
+Retrieve terminal queue results and record any failure's first 40 lines.
+Then fetch and test the current task tips before merging; preserve the
+clean-clone baseline entry. If SIGKILL recurs, inspect the actual failure
+and resource evidence before restarting the workload. Keep the baseline
+and vision open. Document validation does not clear the integration gate.
+
 ## 2026-09-15 — terminal #436 compilation failure
 
 **Not merged.** The carried-over full workspace run on
