@@ -147,6 +147,13 @@ mod tests {
 			.project_read
 			.iter()
 			.any(|path| path == ".agents/skills"));
-		assert!(codex.skills_paths.project_write.is_none());
+		assert_eq!(
+			codex.skills_paths.project_write.as_deref(),
+			Some(".agents/skills"),
+		);
+		let global_write =
+			codex.skills_paths.global_write.expect("codex global write");
+		assert_eq!(global_write.replace('\\', "/"), "~/.codex/skills");
+		assert!(codex.capabilities.skills.mutable_project);
 	}
 }

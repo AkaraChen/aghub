@@ -8,32 +8,40 @@ fn global_data_dir() -> Option<PathBuf> {
 	home_dir().map(|home| home.join(".codex"))
 }
 
+fn push_unique(paths: &mut Vec<PathBuf>, path: PathBuf) {
+	if !paths.contains(&path) {
+		paths.push(path);
+	}
+}
+
 fn global_skills_paths() -> Vec<PathBuf> {
 	let Some(home) = home_dir() else {
 		return Vec::new();
 	};
-	let paths = vec![home.join(".codex/skills")];
+	// Current user path first, then legacy ~/.codex/skills, then admin.
+	// Provider/plugin/system-owned directories stay read-only and are
+	// never added as write targets.
+	let mut paths = Vec::new();
+	push_unique(&mut paths, home.join(".agents/skills"));
+	push_unique(&mut paths, home.join(".codex/skills"));
 	#[cfg(not(target_os = "windows"))]
-	let paths = {
-		let mut p = paths;
-		p.push(PathBuf::from("/etc/codex/skills"));
-		p
-	};
+	push_unique(&mut paths, PathBuf::from("/etc/codex/skills"));
 	paths
 }
 
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
-	let _ = root;
-	Vec::new()
+	vec![root.join(".agents/skills")]
 }
 
 fn global_skill_write_path() -> Option<PathBuf> {
+	// Keep the Codex-owned legacy directory as the global write target so
+	// ~/.agents/skills stays the shared universal target and other agents
+	// do not inherit ~/.codex/skills as an unclaimed compatibility path.
 	home_dir().map(|home| home.join(".codex/skills"))
 }
 
 fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
-	let _ = root;
-	None
+	Some(root.join(".agents/skills"))
 }
 
 fn global_rule_paths() -> Vec<PathBuf> {
@@ -124,6 +132,52 @@ mod tests {
 				project_root.join("AGENTS.override.md"),
 				project_root.join("AGENTS.md"),
 			],
+		);
+	}
+
+	#[test]
+	fn skill_write_paths_keep_legacy_global_and_current_project() {
+		let home = home_dir().expect("home directory");
+		assert_eq!(
+			DESCRIPTOR.skill_write_path(None, crate::ResourceScope::GlobalOnly),
+			Some(home.join(".codex/skills")),
+		);
+
+		let project_root = Path::new("/project");
+		assert_eq!(
+			DESCRIPTOR.skill_write_path(
+				Some(project_root),
+				crate::ResourceScope::ProjectOnly,
+			),
+			Some(project_root.join(".agents/skills")),
+		);
+	}
+
+	#[test]
+	fn skill_read_paths_keep_legacy_and_admin_without_duplicating_current() {
+		let home = home_dir().expect("home directory");
+		let global = DESCRIPTOR.global_skill_read_paths();
+		let mut expected =
+			vec![home.join(".agents/skills"), home.join(".codex/skills")];
+		#[cfg(not(target_os = "windows"))]
+		expected.push(PathBuf::from("/etc/codex/skills"));
+		assert_eq!(global, expected);
+		assert_eq!(
+			global
+				.iter()
+				.filter(|path| *path == &home.join(".agents/skills"))
+				.count(),
+			1,
+		);
+
+		let project_root = Path::new("/project");
+		assert_eq!(
+			DESCRIPTOR.project_skill_read_paths(project_root),
+			vec![project_root.join(".agents/skills")],
+		);
+		assert_ne!(
+			DESCRIPTOR.skill_write_path(None, crate::ResourceScope::GlobalOnly),
+			Some(PathBuf::from("/etc/codex/skills")),
 		);
 	}
 }

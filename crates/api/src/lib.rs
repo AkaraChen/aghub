@@ -856,29 +856,67 @@ mod tests {
 		let project_dir = tempfile::tempdir().expect("project dir");
 		let client = test_client(app_data_dir.path());
 		let query = project_query(project_dir.path());
-		let collection_uri = format!("/api/v1/agents/codex/skills?{query}");
+		let collection_uri = format!("/api/v1/agents/openclaw/skills?{query}");
 
 		let response = post_json(
 			&client,
 			&collection_uri,
 			json!({
-				"name": "codex-private",
-				"description": "Codex target",
+				"name": "openclaw-private",
+				"description": "Openclaw target",
 				"author": null,
 				"version": null,
-				"content": "# Codex",
+				"content": "# Openclaw",
 				"tools": [],
 			}),
 		);
 		assert_eq!(response.status(), Status::UnprocessableEntity);
 		assert!(!project_dir
 			.path()
-			.join(".agents/skills/codex-private")
+			.join(".agents/skills/openclaw-private")
 			.exists());
 		assert!(!project_dir
 			.path()
-			.join(".codex/skills/codex-private")
+			.join(".openclaw/skills/openclaw-private")
 			.exists());
+	}
+
+	#[test]
+	fn route_skill_create_persists_codex_project_skills_to_agents_dir() {
+		let _path_guard = hide_cli_path();
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let query = project_query(project_dir.path());
+		let collection_uri = format!("/api/v1/agents/codex/skills?{query}");
+		let item_uri =
+			format!("/api/v1/agents/codex/skills/codex-project?{query}");
+
+		let response = post_json(
+			&client,
+			&collection_uri,
+			json!({
+				"name": "codex-project",
+				"description": "Codex native project target",
+				"author": null,
+				"version": null,
+				"content": "# Codex",
+				"tools": [],
+			}),
+		);
+		assert_eq!(response.status(), Status::Created);
+		let skill_file = project_dir
+			.path()
+			.join(".agents/skills/codex-project/SKILL.md");
+		assert!(skill_file.is_file());
+		assert!(!project_dir
+			.path()
+			.join(".codex/skills/codex-project")
+			.exists());
+
+		let response = delete_auth(&client, &item_uri);
+		assert_eq!(response.status(), Status::NoContent);
+		assert!(!skill_file.exists());
 	}
 
 	#[test]
