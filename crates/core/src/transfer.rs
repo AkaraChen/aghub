@@ -1358,7 +1358,7 @@ mod tests {
 				project_root: Some(root),
 				name: "repo-helper".to_string(),
 			},
-			vec![SkillTarget::Agent(AgentType::Codex)],
+			vec![SkillTarget::Agent(AgentType::Openclaw)],
 			Vec::<SkillTarget>::new(),
 		)
 		.unwrap();
