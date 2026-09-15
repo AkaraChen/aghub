@@ -87,8 +87,8 @@ use aghub_api::dto::{
 		SkillCopyStorageModeRequest, SkillDiffReferenceRequest,
 		SkillDiffRequest, SkillDiffResponse, SkillDirectoryDiffResponse,
 		SkillFileDiffKindResponse, SkillFileDiffResponse,
-		SkillHardLinkResponse, SkillLinkResponse, SkillLinkStatusResponse,
-		SkillLocationResponse, SkillLockEntryResponse,
+		SkillHardLinkResponse, SkillInstallExistingMode, SkillLinkResponse,
+		SkillLinkStatusResponse, SkillLocationResponse, SkillLockEntryResponse,
 		SkillProviderKindResponse, SkillProviderLoadErrorResponse,
 		SkillProviderResponse, SkillResponse, SkillTreeNodeKind,
 		SkillTreeNodeResponse, SkillTreeQuery, SkillTreeSkillResponse,
@@ -258,6 +258,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<SkillCopyResolutionRequest>(&cfg)?;
 	export_type::<SkillCopyResolutionResult>(&cfg)?;
 	export_type::<SkillCopyResolutionResponse>(&cfg)?;
+	export_type::<SkillInstallExistingMode>(&cfg)?;
 	export_type::<InstallSkillRequest>(&cfg)?;
 	export_type::<InstallSkillResponse>(&cfg)?;
 	export_type::<SkillLockEntryResponse>(&cfg)?;

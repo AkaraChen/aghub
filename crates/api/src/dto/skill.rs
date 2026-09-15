@@ -428,6 +428,20 @@ impl From<&Skill> for SkillResponse {
 	}
 }
 
+/// How install treats a destination that already exists.
+///
+/// Default is `update`: replace the installed copy unless it has local
+/// edits relative to a tracked lock hash. `skip` keeps the previous
+/// skip-if-present behavior.
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum SkillInstallExistingMode {
+	#[default]
+	Update,
+	Skip,
+}
+
 #[derive(Debug, Deserialize, TS)]
 #[ts(export)]
 pub struct InstallSkillRequest {
@@ -437,6 +451,9 @@ pub struct InstallSkillRequest {
 	pub scope: String,
 	pub project_path: Option<String>,
 	pub install_all: Option<bool>,
+	/// Treat existing destinations as update (default) or skip.
+	#[ts(optional = nullable)]
+	pub existing: Option<SkillInstallExistingMode>,
 	/// Content identity returned by a prior review, when one was shown.
 	#[ts(optional = nullable)]
 	pub expected_content_digest: Option<String>,
@@ -596,6 +613,9 @@ pub struct GitInstallRequest {
 	/// without installing, so the import UI can show "auditing" before "installing".
 	#[ts(optional = nullable)]
 	pub audit_only: Option<bool>,
+	/// Treat existing destinations as update (default) or skip.
+	#[ts(optional = nullable)]
+	pub existing: Option<SkillInstallExistingMode>,
 }
 
 /// Request to sync (update in-place) an existing skill from a git session.

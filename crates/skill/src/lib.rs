@@ -94,6 +94,7 @@ pub use parser::{
 };
 pub use sanitize::sanitize_name;
 pub use scan::{scan_skills, ScanError, ScanOptions};
+pub use snapshot::{directory_hash_hex, snapshot_directory};
 pub use validator::{
 	validate, validate_skill_dir, validate_skill_file, validate_zip,
 };

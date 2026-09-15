@@ -77,6 +77,21 @@ pub fn snapshot_directory(root: &Path) -> Result<SkillDirectorySnapshot> {
 	snapshot_directory_with_budget(root, &mut remaining_bytes)
 }
 
+/// Hex-encode a snapshot digest for lock files and API responses.
+pub fn hash_hex(hash: &[u8; 32]) -> String {
+	let mut encoded = String::with_capacity(64);
+	for byte in hash {
+		use std::fmt::Write;
+		let _ = write!(encoded, "{byte:02x}");
+	}
+	encoded
+}
+
+/// Hash a skill directory the same way install lock files record it.
+pub fn directory_hash_hex(root: &Path) -> Result<String> {
+	Ok(hash_hex(&snapshot_directory(root)?.hash))
+}
+
 /// Snapshot a directory while charging file reads to a shared byte budget.
 pub fn snapshot_directory_with_budget(
 	root: &Path,
@@ -611,6 +626,10 @@ mod tests {
 		std::fs::write(second.join("a.txt"), "a").unwrap();
 		std::fs::write(second.join("b.txt"), "b").unwrap();
 
+		assert_eq!(
+			directory_hash_hex(&first).unwrap(),
+			directory_hash_hex(&second).unwrap()
+		);
 		let first = snapshot_directory(&first).unwrap();
 		let second = snapshot_directory(&second).unwrap();
 

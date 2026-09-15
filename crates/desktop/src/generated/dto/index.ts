@@ -149,6 +149,7 @@ export type { SkillDirectoryDiffResponse } from "./SkillDirectoryDiffResponse";
 export type { SkillFileDiffKindResponse } from "./SkillFileDiffKindResponse";
 export type { SkillFileDiffResponse } from "./SkillFileDiffResponse";
 export type { SkillHardLinkResponse } from "./SkillHardLinkResponse";
+export type { SkillInstallExistingMode } from "./SkillInstallExistingMode";
 export type { SkillLinkResponse } from "./SkillLinkResponse";
 export type { SkillLinkStatusResponse } from "./SkillLinkStatusResponse";
 export type { SkillLocationResponse } from "./SkillLocationResponse";

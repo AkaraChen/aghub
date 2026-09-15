@@ -47,11 +47,12 @@ use crate::{
 		GlobalSkillLockResponse, InstallSkillRequest, InstallSkillResponse,
 		LocalSkillLockEntryResponse, ProjectLockQuery,
 		ProjectSkillLockResponse, SkillContentQuery, SkillHardLinkResponse,
-		SkillLinkResponse, SkillLinkStatusResponse, SkillLocationResponse,
-		SkillLockEntryResponse, SkillProviderKindResponse,
-		SkillProviderLoadErrorResponse, SkillProviderResponse, SkillResponse,
-		SkillTreeNodeKind, SkillTreeNodeResponse, SkillTreeQuery,
-		SkillTreeSkillResponse, UpdateSkillRequest, ValidationError,
+		SkillInstallExistingMode, SkillLinkResponse, SkillLinkStatusResponse,
+		SkillLocationResponse, SkillLockEntryResponse,
+		SkillProviderKindResponse, SkillProviderLoadErrorResponse,
+		SkillProviderResponse, SkillResponse, SkillTreeNodeKind,
+		SkillTreeNodeResponse, SkillTreeQuery, SkillTreeSkillResponse,
+		UpdateSkillRequest, ValidationError,
 	},
 	dto::transfer::{
 		OperationBatchResponse, ReconcileRequest, TransferRequest,
@@ -553,6 +554,77 @@ fn install_git_skill_to_dir(
 	full_path: &std::path::Path,
 	target_dir: &std::path::Path,
 ) -> Result<String, ApiError> {
+	Ok(install_git_skill_to_dir_with_policy(
+		full_path,
+		target_dir,
+		SkillInstallExistingMode::Update,
+		None,
+	)?
+	.name)
+}
+
+const SKILL_LOCAL_CHANGES: &str = "SKILL_LOCAL_CHANGES";
+const SKILL_LOCAL_CHANGES_MESSAGE: &str =
+	"Local modifications differ from the last installed hash; skipped overwrite";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GitSkillInstall {
+	name: String,
+	folder_hash: String,
+	skipped_local_changes: bool,
+}
+
+fn hash_is_tracked(hash: &str) -> bool {
+	!hash.is_empty() && hash != EMPTY_SKILLS_LOCK_DIGEST
+}
+
+fn skill_directory_hash(root: &std::path::Path) -> Result<String, ApiError> {
+	let hashed = match std::fs::canonicalize(root) {
+		Ok(canonical) => canonical,
+		Err(_) => root.to_path_buf(),
+	};
+	skill::directory_hash_hex(&hashed).map_err(|error| {
+		ApiError::new(
+			Status::InternalServerError,
+			format!("Failed to hash skill directory: {error}"),
+			"SKILL_HASH_FAILED",
+		)
+	})
+}
+
+fn recorded_install_hash(
+	skill_name: &str,
+	resource_scope: ResourceScope,
+	project_root: Option<&std::path::Path>,
+) -> Option<String> {
+	match resource_scope {
+		ResourceScope::GlobalOnly => skill::get_skill_from_lock(skill_name)
+			.map(|entry| entry.skill_folder_hash)
+			.filter(|hash| hash_is_tracked(hash)),
+		ResourceScope::ProjectOnly => {
+			let cwd = project_root?;
+			skill::read_local_lock(Some(cwd))
+				.skills
+				.get(skill_name)
+				.map(|entry| entry.computed_hash.clone())
+				.filter(|hash| hash_is_tracked(hash))
+		}
+		ResourceScope::Both => None,
+	}
+}
+
+fn existing_skill_mode(
+	value: Option<SkillInstallExistingMode>,
+) -> SkillInstallExistingMode {
+	value.unwrap_or(SkillInstallExistingMode::Update)
+}
+
+fn install_git_skill_to_dir_with_policy(
+	full_path: &std::path::Path,
+	target_dir: &std::path::Path,
+	existing: SkillInstallExistingMode,
+	recorded_hash: Option<&str>,
+) -> Result<GitSkillInstall, ApiError> {
 	let parsed = skill::parser::parse(full_path).map_err(|e| {
 		ApiError::new(
 			Status::BadRequest,
@@ -563,17 +635,54 @@ fn install_git_skill_to_dir(
 	let skill = convert_skill(parsed);
 	let safe_name = sanitize_name(&skill.name);
 	let dest_root = target_dir.join(&safe_name);
+	let source_root = get_skill_root(full_path.to_path_buf());
+	let source_hash = skill_directory_hash(&source_root)?;
 
 	match std::fs::symlink_metadata(&dest_root) {
-		Ok(_) => {}
 		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-			let source_root = get_skill_root(full_path.to_path_buf());
 			replace_skill_dir_staged(&source_root, &dest_root)?;
+			Ok(GitSkillInstall {
+				name: skill.name,
+				folder_hash: source_hash,
+				skipped_local_changes: false,
+			})
 		}
-		Err(error) => return Err(ApiError::from(ConfigError::Io(error))),
+		Err(error) => Err(ApiError::from(ConfigError::Io(error))),
+		Ok(_) => match existing {
+			SkillInstallExistingMode::Skip => Ok(GitSkillInstall {
+				name: skill.name,
+				folder_hash: skill_directory_hash(&dest_root)
+					.unwrap_or(source_hash),
+				skipped_local_changes: false,
+			}),
+			SkillInstallExistingMode::Update => {
+				let dest_hash = skill_directory_hash(&dest_root).ok();
+				if dest_hash.as_deref() == Some(source_hash.as_str()) {
+					return Ok(GitSkillInstall {
+						name: skill.name,
+						folder_hash: source_hash,
+						skipped_local_changes: false,
+					});
+				}
+				if dest_hash.as_ref().is_some_and(|hash| {
+					recorded_hash
+						.is_some_and(|recorded| recorded != hash.as_str())
+				}) {
+					return Ok(GitSkillInstall {
+						name: skill.name,
+						folder_hash: dest_hash.unwrap_or(source_hash),
+						skipped_local_changes: true,
+					});
+				}
+				replace_skill_dir_staged(&source_root, &dest_root)?;
+				Ok(GitSkillInstall {
+					name: skill.name,
+					folder_hash: source_hash,
+					skipped_local_changes: false,
+				})
+			}
+		},
 	}
-
-	Ok(skill.name)
 }
 
 type GitInstallAgentGroup = Vec<(String, SkillTarget)>;
@@ -968,6 +1077,7 @@ fn write_skill_install_lock(
 	project_root: Option<&std::path::Path>,
 	source: &skill::InstallLockSource,
 	lock_skill_path: Option<String>,
+	skill_folder_hash: Option<String>,
 ) -> Result<(), ApiError> {
 	match resource_scope {
 		ResourceScope::GlobalOnly => {
@@ -975,7 +1085,7 @@ fn write_skill_install_lock(
 				skill_name,
 				source,
 				lock_skill_path,
-				Some(EMPTY_SKILLS_LOCK_DIGEST.to_string()),
+				skill_folder_hash,
 			)
 			.map_err(|e| {
 				ApiError::new(
@@ -993,14 +1103,19 @@ fn write_skill_install_lock(
 					"INVALID_PARAM",
 				)
 			})?;
-			skill::write_project_install_lock(skill_name, source, cwd)
-				.map_err(|e| {
-					ApiError::new(
-						Status::InternalServerError,
-						format!("Failed to update project skill lock: {e}"),
-						"SKILL_LOCK_ERROR",
-					)
-				})?;
+			skill::write_project_install_lock(
+				skill_name,
+				source,
+				cwd,
+				skill_folder_hash,
+			)
+			.map_err(|e| {
+				ApiError::new(
+					Status::InternalServerError,
+					format!("Failed to update project skill lock: {e}"),
+					"SKILL_LOCK_ERROR",
+				)
+			})?;
 		}
 		ResourceScope::Both => {
 			return Err(ApiError::new(
@@ -1373,6 +1488,8 @@ fn import_skill_blocking(
 		source_url: request.path,
 		ref_name: None,
 	};
+	let folder_hash =
+		skill_directory_hash(&get_skill_root(import_path.clone())).ok();
 	let imported = match manager.add_skill_from_snapshot_with_commit(
 		audit.snapshot(&import_path),
 		|imported, _| {
@@ -1382,6 +1499,7 @@ fn import_skill_blocking(
 				project_root.as_deref(),
 				&lock_source,
 				None,
+				folder_hash.clone(),
 			)
 		},
 	) {
@@ -2090,14 +2208,30 @@ pub async fn install_skill(
 
 	let mut has_errors = !invalid_agents.is_empty();
 	let mut installed_skill_names = std::collections::HashSet::new();
+	let mut installed_skill_hashes = HashMap::new();
+	let existing = existing_skill_mode(req.existing);
 
 	for skill in &selected_skills {
 		let reviewed_path = audit.snapshot(&skill.full_path).path();
+		let recorded = recorded_install_hash(
+			&skill.name,
+			resource_scope,
+			project_root.as_deref(),
+		);
 		for (target_dir, agents) in &dir_groups {
-			match install_git_skill_to_dir(reviewed_path, target_dir) {
-				Ok(skill_name) => {
-					installed_skill_names.insert(skill_name);
+			match install_git_skill_to_dir_with_policy(
+				reviewed_path,
+				target_dir,
+				existing,
+				recorded.as_deref(),
+			) {
+				Ok(install) if install.skipped_local_changes => {
 					let _ = agents;
+				}
+				Ok(install) => {
+					installed_skill_hashes
+						.insert(install.name.clone(), install.folder_hash);
+					installed_skill_names.insert(install.name);
 				}
 				Err(_) => has_errors = true,
 			}
@@ -2115,6 +2249,7 @@ pub async fn install_skill(
 			project_root.as_deref(),
 			&lock_source,
 			Some(skill::lock_skill_file_path(&skill.relative_dir)),
+			installed_skill_hashes.get(&skill.name).cloned(),
 		)?;
 	}
 
@@ -2733,17 +2868,43 @@ pub async fn git_install_skills(
 		}));
 	}
 
+	let existing = existing_skill_mode(req.existing);
 	for (relative_dir, full_path) in &selected_paths {
 		let mut installed = false;
+		let mut folder_hash = None;
 		let reviewed_path = audit.snapshot(full_path).path();
+		let parsed_name = skill::parser::parse(reviewed_path)
+			.ok()
+			.map(|skill| skill.name);
+		let recorded = parsed_name.as_deref().and_then(|name| {
+			recorded_install_hash(name, resource_scope, project_root.as_deref())
+		});
 
 		for (target_dir, agents) in &dir_groups {
-			match install_git_skill_to_dir(reviewed_path, target_dir) {
-				Ok(skill_name) => {
-					installed = true;
+			match install_git_skill_to_dir_with_policy(
+				reviewed_path,
+				target_dir,
+				existing,
+				recorded.as_deref(),
+			) {
+				Ok(install) if install.skipped_local_changes => {
 					for (agent_str, _) in agents {
 						results.push(GitInstallResultEntry {
-							name: skill_name.clone(),
+							name: install.name.clone(),
+							agent: agent_str.clone(),
+							success: false,
+							error: Some(format!(
+								"{SKILL_LOCAL_CHANGES}: {SKILL_LOCAL_CHANGES_MESSAGE}"
+							)),
+						});
+					}
+				}
+				Ok(install) => {
+					installed = true;
+					folder_hash = Some(install.folder_hash);
+					for (agent_str, _) in agents {
+						results.push(GitInstallResultEntry {
+							name: install.name.clone(),
 							agent: agent_str.clone(),
 							success: true,
 							error: None,
@@ -2764,9 +2925,6 @@ pub async fn git_install_skills(
 		}
 
 		if installed {
-			let parsed_name = skill::parser::parse(reviewed_path)
-				.ok()
-				.map(|skill| skill.name);
 			if let Some(skill_name) = parsed_name {
 				write_skill_install_lock(
 					&skill_name,
@@ -2774,6 +2932,7 @@ pub async fn git_install_skills(
 					project_root.as_deref(),
 					&source,
 					Some(skill::lock_skill_file_path(relative_dir)),
+					folder_hash,
 				)?;
 			}
 		}
@@ -4099,6 +4258,107 @@ mod tests {
 				.unwrap_or_else(|e| panic!("{}", e.body.error));
 		assert_eq!(second, "hello-skill");
 		assert!(target_dir.join("hello-skill/SKILL.md").exists());
+	}
+
+	#[test]
+	fn git_install_updates_existing_skill_content() {
+		let temp = tempdir().unwrap();
+		let target_dir = temp.path().join("skills");
+		let source_dir = temp.path().join("source/hello-skill");
+		write_test_skill(&source_dir, "hello-skill", "first body");
+		install_git_skill_to_dir_with_policy(
+			&source_dir.join("SKILL.md"),
+			&target_dir,
+			SkillInstallExistingMode::Update,
+			None,
+		)
+		.unwrap_or_else(|e| panic!("{}", e.body.error));
+
+		write_test_skill(&source_dir, "hello-skill", "updated body");
+		let result = install_git_skill_to_dir_with_policy(
+			&source_dir.join("SKILL.md"),
+			&target_dir,
+			SkillInstallExistingMode::Update,
+			None,
+		)
+		.unwrap_or_else(|e| panic!("{}", e.body.error));
+
+		assert!(!result.skipped_local_changes);
+		let installed =
+			std::fs::read_to_string(target_dir.join("hello-skill/SKILL.md"))
+				.unwrap();
+		assert!(installed.contains("updated body"));
+		assert_eq!(
+			result.folder_hash,
+			skill_directory_hash(&source_dir).unwrap()
+		);
+	}
+
+	#[test]
+	fn git_install_skip_mode_keeps_existing_skill_content() {
+		let temp = tempdir().unwrap();
+		let target_dir = temp.path().join("skills");
+		let source_dir = temp.path().join("source/hello-skill");
+		write_test_skill(&source_dir, "hello-skill", "first body");
+		install_git_skill_to_dir_with_policy(
+			&source_dir.join("SKILL.md"),
+			&target_dir,
+			SkillInstallExistingMode::Update,
+			None,
+		)
+		.unwrap_or_else(|e| panic!("{}", e.body.error));
+
+		write_test_skill(&source_dir, "hello-skill", "updated body");
+		install_git_skill_to_dir_with_policy(
+			&source_dir.join("SKILL.md"),
+			&target_dir,
+			SkillInstallExistingMode::Skip,
+			None,
+		)
+		.unwrap_or_else(|e| panic!("{}", e.body.error));
+
+		let installed =
+			std::fs::read_to_string(target_dir.join("hello-skill/SKILL.md"))
+				.unwrap();
+		assert!(installed.contains("first body"));
+		assert!(!installed.contains("updated body"));
+	}
+
+	#[test]
+	fn git_install_skips_local_edits_when_lock_hash_is_tracked() {
+		let temp = tempdir().unwrap();
+		let target_dir = temp.path().join("skills");
+		let source_dir = temp.path().join("source/hello-skill");
+		write_test_skill(&source_dir, "hello-skill", "installed body");
+		let installed = install_git_skill_to_dir_with_policy(
+			&source_dir.join("SKILL.md"),
+			&target_dir,
+			SkillInstallExistingMode::Update,
+			None,
+		)
+		.unwrap_or_else(|e| panic!("{}", e.body.error));
+
+		std::fs::write(
+			target_dir.join("hello-skill/SKILL.md"),
+			"---\nname: hello-skill\ndescription: test skill\n---\n\nlocal edit\n",
+		)
+		.unwrap();
+		write_test_skill(&source_dir, "hello-skill", "upstream body");
+
+		let result = install_git_skill_to_dir_with_policy(
+			&source_dir.join("SKILL.md"),
+			&target_dir,
+			SkillInstallExistingMode::Update,
+			Some(&installed.folder_hash),
+		)
+		.unwrap_or_else(|e| panic!("{}", e.body.error));
+
+		assert!(result.skipped_local_changes);
+		let dest =
+			std::fs::read_to_string(target_dir.join("hello-skill/SKILL.md"))
+				.unwrap();
+		assert!(dest.contains("local edit"));
+		assert!(!dest.contains("upstream body"));
 	}
 
 	#[test]

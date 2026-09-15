@@ -243,13 +243,15 @@ pub fn write_project_install_lock(
 	skill_name: &str,
 	source: &InstallLockSource,
 	cwd: &Path,
+	skill_folder_hash: Option<String>,
 ) -> std::io::Result<()> {
 	write_project_install_locks(
 		source,
 		&[InstallLockUpdate {
 			name: skill_name.to_string(),
 			skill_path: None,
-			skill_folder_hash: EMPTY_SKILLS_LOCK_DIGEST.to_string(),
+			skill_folder_hash: skill_folder_hash
+				.unwrap_or_else(|| EMPTY_SKILLS_LOCK_DIGEST.to_string()),
 		}],
 		cwd,
 	)
@@ -381,6 +383,7 @@ mod tests {
 				ref_name: Some("main".to_string()),
 			},
 			dir.path(),
+			None,
 		)
 		.unwrap();
 
