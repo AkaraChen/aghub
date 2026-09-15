@@ -4,6 +4,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const desktopPort = Number(process.env.AGHUB_E2E_PORT ?? "1420");
 const apiPort = Number(process.env.AGHUB_E2E_API_PORT ?? "45999");
+const skipApi = process.env.AGHUB_E2E_SKIP_API === "1";
 
 export default defineConfig({
 	testDir: "./e2e",
@@ -43,33 +44,43 @@ export default defineConfig({
 			reuseExistingServer: false,
 			timeout: 60_000,
 		},
-		{
-			// The real API server on the port the Tauri mock hands to the
-			// frontend, driving a fixture ccusage — the usage pipeline test
-			// exercises real ccusage JSON through the Rust parsers. Port
-			// probe (not url): every route sits behind auth.
-			command:
-				"cargo run --quiet --manifest-path ../api/Cargo.toml --bin aghub-api",
-			port: apiPort,
-			env: {
-				// Spread: playwright replaces (not merges) the child env, and
-				// cargo needs PATH & co.
-				...process.env,
-				AGHUB_API_PORT: String(apiPort),
-				AGHUB_API_TOKEN: "e2e-token",
-				AGHUB_API_ALLOWED_ORIGIN: `http://localhost:${desktopPort}`,
-				AGHUB_API_DATA_DIR: path.resolve(
-					`test-results/api-data-${apiPort}`,
-				),
-				// cwd is this config's directory when playwright runs.
-				AGHUB_CCUSAGE_BIN: path.resolve(
-					"e2e/fixtures/fake-ccusage.mjs",
-				),
-			},
-			reuseExistingServer: false,
-			// Incremental runs boot in seconds; a cold target does not fit
-			// this budget — run `cargo build -p aghub-api` once first.
-			timeout: 300_000,
-		},
+		...(!skipApi
+			? [
+					{
+						// The real API server on the port the Tauri mock hands to
+						// the frontend, driving a fixture ccusage — the usage
+						// pipeline test exercises real ccusage JSON through the
+						// Rust parsers. Port probe (not url): every route sits
+						// behind auth.
+						// AGHUB_E2E_SKIP_API=1 skips this process for mock-only
+						// suites so a headless builder does not compile
+						// aghub-api (yara-x) while another cargo is live.
+						command:
+							"cargo run --quiet --manifest-path ../api/Cargo.toml --bin aghub-api",
+						port: apiPort,
+						env: {
+							// Spread: playwright replaces (not merges) the
+							// child env, and cargo needs PATH & co.
+							...process.env,
+							AGHUB_API_PORT: String(apiPort),
+							AGHUB_API_TOKEN: "e2e-token",
+							AGHUB_API_ALLOWED_ORIGIN: `http://localhost:${desktopPort}`,
+							AGHUB_API_DATA_DIR: path.resolve(
+								`test-results/api-data-${apiPort}`,
+							),
+							// cwd is this config's directory when playwright
+							// runs.
+							AGHUB_CCUSAGE_BIN: path.resolve(
+								"e2e/fixtures/fake-ccusage.mjs",
+							),
+						},
+						reuseExistingServer: false,
+						// Incremental runs boot in seconds; a cold target
+						// does not fit this budget — run
+						// `cargo build -p aghub-api` once first.
+						timeout: 300_000,
+					},
+				]
+			: []),
 	],
 });
