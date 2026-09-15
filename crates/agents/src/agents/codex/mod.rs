@@ -14,19 +14,41 @@ fn push_unique(paths: &mut Vec<PathBuf>, path: PathBuf) {
 	}
 }
 
+fn default_codex_home(home: &Path) -> PathBuf {
+	home.join(".codex")
+}
+
+fn codex_home_dir() -> Option<PathBuf> {
+	match std::env::var_os("CODEX_HOME") {
+		Some(value) if !value.is_empty() => Some(PathBuf::from(value)),
+		_ => home_dir().map(|home| default_codex_home(&home)),
+	}
+}
+
+fn global_skills_paths_from(home: &Path, codex_home: &Path) -> Vec<PathBuf> {
+	// Current user path, $CODEX_HOME/skills (defaults to ~/.codex/skills),
+	// then the hardcoded legacy ~/.codex/skills when CODEX_HOME differs,
+	// then admin. Provider/plugin/system-owned directories stay read-only
+	// and are never added as write targets. Live skills/list may report
+	// canonical symlink targets under these roots; those targets are not
+	// extra write roots.
+	let mut paths = Vec::new();
+	push_unique(&mut paths, home.join(".agents/skills"));
+	push_unique(&mut paths, codex_home.join("skills"));
+	push_unique(&mut paths, default_codex_home(home).join("skills"));
+	#[cfg(not(target_os = "windows"))]
+	push_unique(&mut paths, PathBuf::from("/etc/codex/skills"));
+	paths
+}
+
 fn global_skills_paths() -> Vec<PathBuf> {
 	let Some(home) = home_dir() else {
 		return Vec::new();
 	};
-	// Current user path first, then legacy ~/.codex/skills, then admin.
-	// Provider/plugin/system-owned directories stay read-only and are
-	// never added as write targets.
-	let mut paths = Vec::new();
-	push_unique(&mut paths, home.join(".agents/skills"));
-	push_unique(&mut paths, home.join(".codex/skills"));
-	#[cfg(not(target_os = "windows"))]
-	push_unique(&mut paths, PathBuf::from("/etc/codex/skills"));
-	paths
+	let Some(codex_home) = codex_home_dir() else {
+		return Vec::new();
+	};
+	global_skills_paths_from(&home, &codex_home)
 }
 
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
@@ -39,11 +61,15 @@ fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
 	paths
 }
 
+fn global_skill_write_path_from(codex_home: &Path) -> PathBuf {
+	// Install into $CODEX_HOME/skills so a custom CODEX_HOME is both a
+	// read root and the documented write target. ~/.agents/skills stays
+	// the shared universal target.
+	codex_home.join("skills")
+}
+
 fn global_skill_write_path() -> Option<PathBuf> {
-	// Keep the Codex-owned legacy directory as the global write target so
-	// ~/.agents/skills stays the shared universal target and other agents
-	// do not inherit ~/.codex/skills as an unclaimed compatibility path.
-	home_dir().map(|home| home.join(".codex/skills"))
+	codex_home_dir().map(|codex_home| global_skill_write_path_from(&codex_home))
 }
 
 fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
@@ -209,6 +235,47 @@ mod tests {
 		assert_ne!(
 			DESCRIPTOR.skill_write_path(None, crate::ResourceScope::GlobalOnly),
 			Some(PathBuf::from("/etc/codex/skills")),
+		);
+	}
+
+	#[test]
+	fn skill_paths_honor_custom_codex_home_without_dropping_legacy() {
+		let home = Path::new("/home/user");
+		let custom = Path::new("/opt/codex-home");
+		let mut expected = vec![
+			home.join(".agents/skills"),
+			custom.join("skills"),
+			home.join(".codex/skills"),
+		];
+		#[cfg(not(target_os = "windows"))]
+		expected.push(PathBuf::from("/etc/codex/skills"));
+		assert_eq!(global_skills_paths_from(home, custom), expected);
+		assert_eq!(global_skill_write_path_from(custom), custom.join("skills"),);
+		assert_ne!(
+			global_skill_write_path_from(custom),
+			home.join(".agents/skills"),
+		);
+		assert_ne!(
+			global_skill_write_path_from(custom),
+			home.join(".codex/skills"),
+		);
+	}
+
+	#[test]
+	fn skill_paths_do_not_duplicate_default_codex_home() {
+		let home = Path::new("/home/user");
+		let default_home = default_codex_home(home);
+		let paths = global_skills_paths_from(home, &default_home);
+		assert_eq!(
+			paths
+				.iter()
+				.filter(|path| *path == &home.join(".codex/skills"))
+				.count(),
+			1,
+		);
+		assert_eq!(
+			global_skill_write_path_from(&default_home),
+			home.join(".codex/skills"),
 		);
 	}
 }
