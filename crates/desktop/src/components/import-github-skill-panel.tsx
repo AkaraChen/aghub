@@ -462,6 +462,9 @@ export function ImportGithubSkillPanel({
 	const handleDone = () => {
 		if (phase === "installing") return;
 		dropAuditReview();
+		// Install consumes the scan session. Drop the git-scan cache so a
+		// later auto-scan cannot reuse that session_id as placeholder data.
+		if (phase === "done") dropGitScanQuery();
 		onDone();
 	};
 

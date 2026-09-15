@@ -1824,6 +1824,15 @@ test("updating a library re-imports from its source", async ({ page }) => {
 			.getByTestId("group-section-github/AkaraChen/alpha-pack")
 			.getByRole("option", { name: "fresh-skill" }),
 	).toBeVisible();
+
+	// Reopening update-source must scan again; the previous session was
+	// consumed by install and must not be served from the query cache.
+	const rescan = page.waitForRequest((request) =>
+		request.url().endsWith("/api/v1/skills/git/scan"),
+	);
+	await page.getByRole("button", { name: "Update from source" }).click();
+	await rescan;
+	await expect(page.getByText("fresh-skill description")).toBeVisible();
 });
 
 test("updating a private library prefills its stored credential", async ({
