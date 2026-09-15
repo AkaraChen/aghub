@@ -30,7 +30,13 @@ fn global_skills_paths() -> Vec<PathBuf> {
 }
 
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
-	vec![root.join(".agents/skills")]
+	// Codex 0.154.0 skills/list still reports $REPO/.codex/skills as
+	// scope=repo when cwd is the repo root. Keep it as a read-only
+	// legacy path; the current write target is .agents/skills.
+	let mut paths = Vec::new();
+	push_unique(&mut paths, root.join(".agents/skills"));
+	push_unique(&mut paths, root.join(".codex/skills"));
+	paths
 }
 
 fn global_skill_write_path() -> Option<PathBuf> {
@@ -173,7 +179,32 @@ mod tests {
 		let project_root = Path::new("/project");
 		assert_eq!(
 			DESCRIPTOR.project_skill_read_paths(project_root),
-			vec![project_root.join(".agents/skills")],
+			vec![
+				project_root.join(".agents/skills"),
+				project_root.join(".codex/skills"),
+			],
+		);
+		assert_eq!(
+			DESCRIPTOR.native_project_skill_read_paths(project_root),
+			vec![
+				project_root.join(".agents/skills"),
+				project_root.join(".codex/skills"),
+			],
+		);
+		assert_eq!(
+			DESCRIPTOR
+				.project_skill_read_paths(project_root)
+				.iter()
+				.filter(|path| *path == &project_root.join(".agents/skills"))
+				.count(),
+			1,
+		);
+		assert_ne!(
+			DESCRIPTOR.skill_write_path(
+				Some(project_root),
+				crate::ResourceScope::ProjectOnly,
+			),
+			Some(project_root.join(".codex/skills")),
 		);
 		assert_ne!(
 			DESCRIPTOR.skill_write_path(None, crate::ResourceScope::GlobalOnly),
