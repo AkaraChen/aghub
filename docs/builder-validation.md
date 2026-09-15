@@ -1,6 +1,53 @@
 # Builder validation contract
 
+## LoopX completion blocker — 2026-09-15
+
+The full workspace receipts below remain test evidence. They do not imply
+that LoopX has completed the foundation Todo. A fresh attempt with LoopX
+1.0.3 reproduced this ordering conflict:
+
+```text
+turn-scoped advancement completion requires matching writeback and quota spend receipts: matching accountable refresh-state receipt is missing for the original settlement identity
+accountable refresh is blocked until controller-declared completion validation durably completes todo todo_78e9885160c8
+```
+
+The first result came from `todo complete`; the second came from an
+accountable `refresh-state --dry-run`, with the same Todo, agent and Turn.
+Both returned `ok=false`. The installed completion path checks settlement
+before completing the Todo; the accountable refresh path requires the
+controller-validated Todo to be complete first.
+
+The configured validation command has a separate execution mismatch.
+It contains `export`, `cd`, variable expansion and shell separators, but
+the installed validation runner uses `shlex.split` and
+`subprocess.run(argv)` without a shell. Its first executable is therefore
+`export`, which is not available as an executable on this builder.
+The default validation timeout is 20 seconds; the CLI accepts at most
+29 seconds, shorter than the observed full workspace runs.
+
+Repair belongs in the LoopX validation/settlement contract:
+
+1. Permit validation to produce a durable, commit-bound receipt before
+   settlement, then complete and settle without a circular dependency.
+2. Execute a structured argument vector with the required environment in
+   the selected clean checkout. Do not validate the stale canonical
+   checkout merely because it owns the registry.
+3. Support the full test job's lifetime and verify its terminal exit code,
+   commit, clean checkout and complete command before accepting evidence.
+
+Keep the foundation Todo blocked until this path works. Preserve the full
+workspace requirement and existing test assertions. A documentation scan,
+process launch or old receipt for a different commit cannot replace it.
+
 ## Purpose and acceptance
+
+Latest clean-clone validation: `b73fc9ea0cd5ef32c89ef3aa05f79912c6613631`
+passed the complete workspace command with `AGHUB_SKIP_SIDECAR=1`, exit
+**0 in 523.68 seconds**, on 2026-09-15. The failing-test set is empty.
+It reused the judge target cache and the single-job, no-debug-info profile
+below. Git status was empty before and after testing. The resulting merge
+`23cff34e46d9312970a18f6959b1d8763c6f4ba0` has exactly the tested tree
+and was pushed to `origin/main`. See [actual output](../INTEGRATION.md).
 
 Every integration candidate must pass the full Rust workspace test command
 on its exact commit. Record the commit, command, environment, elapsed time,
