@@ -1,5 +1,138 @@
 # Integration record
 
+## 2026-09-15 — #436 workspace reaches tests and fails
+
+**Not merged.** The pinned #436 revision `2fa9578658d9a50b533393f6ccd6c13ff7918249`
+finished at `2026-09-15T10:25:40.137270+00:00` with exit **101**
+after **2478.67 seconds**. Compilation completed; the
+workspace stopped at `aghub-usage` with **93 passed, 1 failed**.
+The failing test is
+`runtime::discovery::tests::version_timeout_stops_descendants`.
+Later workspace targets and doc tests were not reached by this command.
+
+Actual command in the judge worktree (disk-backed target):
+
+```sh
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 cargo test --workspace
+```
+
+### First 40 failure lines
+
+The failure section has fewer than 40 lines; all remaining lines follow.
+
+```text
+failures:
+
+---- runtime::discovery::tests::version_timeout_stops_descendants stdout ----
+
+thread 'runtime::discovery::tests::version_timeout_stops_descendants' (1472402) panicked at crates/usage/src/runtime/discovery.rs:747:9:
+assertion failed: matches!(error, CcusageRuntimeError::VersionProbeTimedOut(_))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    runtime::discovery::tests::version_timeout_stops_descendants
+
+test result: FAILED. 93 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s
+
+error: test failed, to rerun pass `-p aghub-usage --lib`
+```
+
+The queue then started #335 `49deb6c6` at
+`2026-09-15T10:25:40.345908+00:00`. It still owns the judge worktree.
+#436's current remote tip `e14d3272` has not been tested by this queue.
+The attempt to append this new failure to the #436 Todo was again
+rejected because `todo_9e9c2483edde` belongs to `grok-worker-1`.
+The judge-owned foundation Todo carries the evidence instead.
+No change to `crates/usage` exists between main and that current tip;
+that source comparison alone does not determine the failure's cause.
+
+### Diagnostic reruns, not acceptance
+
+The exact test executable recorded in the failed run was invoked directly
+without starting another compiler. Both commands set
+`AGHUB_SKIP_SIDECAR=1` and use the documented PATH:
+
+```sh
+AGHUB_SKIP_SIDECAR=1 target/debug/deps/aghub_usage-7533a8734565109e --exact runtime::discovery::tests::version_timeout_stops_descendants --nocapture
+# test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 93 filtered out; finished in 0.66s
+
+AGHUB_SKIP_SIDECAR=1 target/debug/deps/aghub_usage-7533a8734565109e
+# test result: ok. 94 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.98s
+```
+
+Both diagnostic commands exited 0. The original workspace run remains
+failed; the timeout mismatch was not reproduced in these two runs.
+No assertion, timeout, test selection in the acceptance command, or
+production code was changed. The clean-main queue result is still needed
+to distinguish baseline behavior from candidate behavior.
+
+## 2026-09-15 — #335 skip rewrites the local-edit baseline
+
+**Hold #335 for correction.** Code review of
+`task/335-grok-worker-2@767b0cb740316c03b16da1731cdd435215f63e9c`
+found a path that can erase local edits after an explicit skip. This is a
+source-level finding; an executing regression is still **missing proof**.
+The earlier destination-hash error is propagated by this revision, but
+that correction does not address the sequence below.
+
+1. Install a skill from a repository; the lock records its hash `A`.
+2. Edit the installed skill locally, giving it hash `L`, different from `A`.
+3. Import the same repository using `existing: "skip"`.
+4. The Skip branch returns hash `L` and `skipped_local_changes: false`
+   (`crates/api/src/routes/skills.rs`, lines 652–657 at this revision).
+5. `git_install_skills` treats this as installed (lines 2901–2903) and
+   calls `write_skill_install_lock` with `L` (lines 2926–2935). The lock
+   writer replaces the old hash even though no content was installed.
+   `install_skill` has the same success/hash collection path.
+6. A subsequent Update from that repository sees recorded hash `L`
+   equal to the current destination hash, so its local-change guard
+   (lines 667–675) allows replacement with upstream content.
+
+Required correction: distinguish skipped destinations from content that
+was installed or verified against the tracked baseline. Preserve the
+prior lock hash and provenance when skipping. Add a regression through
+installation, local edit, Skip, and Update, asserting both that Skip
+preserves the lock and that Update preserves the local content. Keep the
+existing destination-hash failure regression and all current assertions.
+The judge has not edited the peer's code.
+
+The running #335 predecessor (`49deb6c6`) also emitted:
+
+```text
+warning: function `install_git_skill_to_dir` is never used
+   --> crates/api/src/routes/skills.rs:553:4
+```
+
+Source inspection finds that wrapper still present at `767b0cb7`, with
+its only remaining callers in tests. Address this before the repository's
+Clippy check with warnings denied. Clippy itself has not run in this pass.
+
+The authorized attempt to attach this finding to the peer Todo was rejected:
+
+```text
+agent_id='codex-judge' cannot update todo_id='todo_25a708f3ff3d'; it is claimed_by='grok-worker-2'
+```
+
+The claim was preserved. This report and the judge-owned foundation Todo
+carry the finding; the peer Todo was not changed.
+
+Source inspection commands:
+
+```sh
+git diff origin/main...origin/task/335-grok-worker-2 -- crates/api/src/routes/skills.rs crates/skill/src/install.rs
+git show origin/task/335-grok-worker-2:crates/api/src/routes/skills.rs | nl -ba | sed -n '645,700p;2865,2945p'
+```
+
+The explicit fetch found #436 at `e14d3272`, #335 at `767b0cb7`, and
+foundation at `dce344b7` before this report. Main remains `72f296f0`.
+There are no duplicate issue branches. The existing serial queue is
+still compiling older #436 `2fa95786`; it has not produced a final
+result. Its remaining pinned candidates are also older revisions.
+Do not change its worktree or start concurrent Cargo; collect its final
+results, then validate freshly fetched candidate tips before integration.
+No workspace pass, merge, native desktop, or sidecar proof is claimed.
+
 ## 2026-09-15 — acceptance boundaries and updated candidate review
 
 Observed at `2026-09-15T10:08:31.420370+00:00`. **No branch merged.**
