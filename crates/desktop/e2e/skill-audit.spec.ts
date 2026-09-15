@@ -62,6 +62,13 @@ async function openAlphaPackUpdate(page: Page) {
 	await page.getByRole("button", { name: "Update from source" }).click();
 }
 
+async function waitForUpdateSourceScan(
+	page: Page,
+	skillText = "fresh-skill description",
+) {
+	await expect(page.getByText(skillText)).toBeVisible();
+}
+
 test("a grouped skill is audited across every installed path", async ({
 	page,
 }) => {
@@ -165,7 +172,7 @@ test("a non-benign Git import confirms the audited content digest without nestin
 	});
 
 	await openAlphaPackUpdate(page);
-	await page.getByRole("button", { name: "Scan", exact: true }).click();
+	await waitForUpdateSourceScan(page);
 	const freshSkillDescription = page.getByText("fresh-skill description");
 	await expect(freshSkillDescription).toBeVisible();
 	const freshSkillRow = freshSkillDescription.locator(
@@ -226,7 +233,7 @@ test("a changed non-benign re-audit opens its findings", async ({ page }) => {
 	});
 
 	await openAlphaPackUpdate(page);
-	await page.getByRole("button", { name: "Scan", exact: true }).click();
+	await waitForUpdateSourceScan(page);
 	await page.getByRole("button", { name: "Install Selected" }).click();
 
 	await expect(
@@ -484,37 +491,52 @@ test("Git sync audits first and confirms the same content digest before writing"
 test("resetting a Git scan discards its late response", async ({ page }) => {
 	await installMocks(page);
 	let releaseScan: (() => void) | undefined;
+	let scanFulfilled = false;
 	const scanGate = new Promise<void>((resolve) => {
 		releaseScan = resolve;
 	});
 	await page.route(e2eApiUrl("/skills/git/scan"), async (route) => {
 		await scanGate;
-		await route.fulfill({
-			status: 200,
-			contentType: "application/json",
-			body: JSON.stringify({
-				session_id: "late-session",
-				branches: ["main"],
-				current_branch: "main",
-				skills: [
-					{
-						name: "late-skill",
-						description: "late scan result",
-						author: null,
-						version: null,
-						path: "skills/late-skill",
-						audit: benignAudit,
-					},
-				],
-			}),
-		});
+		try {
+			await route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify({
+					session_id: "late-session",
+					branches: ["main"],
+					current_branch: "main",
+					skills: [
+						{
+							name: "late-skill",
+							description: "late scan result",
+							author: null,
+							version: null,
+							path: "skills/late-skill",
+							audit: benignAudit,
+						},
+					],
+				}),
+			});
+		} catch {
+			// Reset cancels the in-flight scan; fulfill then races the abort.
+		}
+		scanFulfilled = true;
 	});
 
-	await openAlphaPackUpdate(page);
+	await page.goto("/skills");
+	await expect(
+		page.getByRole("option", { name: "solo-skill" }),
+	).toBeVisible();
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		})
+		.click();
 	const scanRequest = page.waitForRequest((request) =>
 		request.url().endsWith("/api/v1/skills/git/scan"),
 	);
-	await page.getByRole("button", { name: "Scan", exact: true }).click();
+	await page.getByRole("button", { name: "Update from source" }).click();
 	await scanRequest;
 
 	const repositoryCard = page.getByRole("button", {
@@ -526,11 +548,8 @@ test("resetting a Git scan discards its late response", async ({ page }) => {
 		page.getByRole("button", { name: "Scan", exact: true }),
 	).toBeVisible();
 
-	const scanResponse = page.waitForResponse((response) =>
-		response.url().endsWith("/api/v1/skills/git/scan"),
-	);
 	releaseScan?.();
-	await scanResponse;
+	await expect.poll(() => scanFulfilled).toBe(true);
 	await expect(page.getByText("late scan result")).toBeHidden();
 });
 
@@ -559,7 +578,7 @@ test("leaving a Git import while auditing never starts the write phase", async (
 	});
 
 	await openAlphaPackUpdate(page);
-	await page.getByRole("button", { name: "Scan", exact: true }).click();
+	await waitForUpdateSourceScan(page);
 	await page.getByRole("button", { name: "Install Selected" }).click();
 	await expect(page.getByText("Auditing", { exact: true })).toBeVisible();
 
@@ -646,8 +665,7 @@ test("switching branches discards the previous audit and session", async ({
 	});
 
 	await openAlphaPackUpdate(page);
-	await page.getByRole("button", { name: "Scan", exact: true }).click();
-	await expect(page.getByText("main branch skill")).toBeVisible();
+	await waitForUpdateSourceScan(page, "main branch skill");
 	await page.getByRole("button", { name: "Install Selected" }).click();
 	await expect(
 		page.getByRole("button", { name: "Install anyway" }),
@@ -736,8 +754,7 @@ test("disabling automatic scans skips preview but keeps write-time assessment", 
 		})
 		.click();
 	await page.getByRole("button", { name: "Update from source" }).click();
-	await page.getByRole("button", { name: "Scan", exact: true }).click();
-	await expect(page.getByText("fresh-skill description")).toBeVisible();
+	await waitForUpdateSourceScan(page);
 	await page.getByRole("button", { name: "Install Selected" }).click();
 	await expect(
 		page.getByRole("heading", { name: "Installation complete" }),

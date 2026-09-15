@@ -465,6 +465,13 @@ export function ImportGithubSkillPanel({
 		onDone();
 	};
 
+	const dropGitScanQuery = () => {
+		setScanBranch(null);
+		lastSessionIdRef.current = null;
+		void queryClient.cancelQueries({ queryKey: ["git-scan"] });
+		void queryClient.removeQueries({ queryKey: ["git-scan"] });
+	};
+
 	const handleImportAnother = () => {
 		if (phase === "installing") return;
 		dropAuditReview();
@@ -481,9 +488,7 @@ export function ImportGithubSkillPanel({
 		setCard3Open(false);
 		setCard4Open(false);
 		setBasePhase("scanning");
-		setScanBranch(null);
-		lastSessionIdRef.current = null;
-		void queryClient.removeQueries({ queryKey: ["git-scan"] });
+		dropGitScanQuery();
 		setScanRequested(Boolean(autoScan && initialUrl));
 	};
 
@@ -503,10 +508,11 @@ export function ImportGithubSkillPanel({
 			setCard3Open(false);
 			setCard4Open(false);
 			setBasePhase("scanning");
-			setScanBranch(null);
-			lastSessionIdRef.current = null;
-			void queryClient.removeQueries({ queryKey: ["git-scan"] });
-			setScanRequested(Boolean(autoScan && urlValue.trim()));
+			dropGitScanQuery();
+			// Initial update-source open still auto-scans. Going back to
+			// the form requires an explicit Scan so a late in-flight
+			// response cannot populate the reset panel.
+			setScanRequested(false);
 		}
 		setCard1Open((v) => !v);
 	};
