@@ -656,21 +656,20 @@ fn install_git_skill_to_dir_with_policy(
 				skipped_local_changes: false,
 			}),
 			SkillInstallExistingMode::Update => {
-				let dest_hash = skill_directory_hash(&dest_root).ok();
-				if dest_hash.as_deref() == Some(source_hash.as_str()) {
+				let dest_hash = skill_directory_hash(&dest_root)?;
+				if dest_hash == source_hash {
 					return Ok(GitSkillInstall {
 						name: skill.name,
 						folder_hash: source_hash,
 						skipped_local_changes: false,
 					});
 				}
-				if dest_hash.as_ref().is_some_and(|hash| {
-					recorded_hash
-						.is_some_and(|recorded| recorded != hash.as_str())
-				}) {
+				if recorded_hash
+					.is_some_and(|recorded| recorded != dest_hash.as_str())
+				{
 					return Ok(GitSkillInstall {
 						name: skill.name,
-						folder_hash: dest_hash.unwrap_or(source_hash),
+						folder_hash: dest_hash,
 						skipped_local_changes: true,
 					});
 				}
@@ -4359,6 +4358,46 @@ mod tests {
 				.unwrap();
 		assert!(dest.contains("local edit"));
 		assert!(!dest.contains("upstream body"));
+	}
+
+	#[test]
+	fn git_install_preserves_dest_when_hash_exceeds_snapshot_limit() {
+		let temp = tempdir().unwrap();
+		let target_dir = temp.path().join("skills");
+		let source_dir = temp.path().join("source/hello-skill");
+		write_test_skill(&source_dir, "hello-skill", "installed body");
+		let installed = install_git_skill_to_dir_with_policy(
+			&source_dir.join("SKILL.md"),
+			&target_dir,
+			SkillInstallExistingMode::Update,
+			None,
+		)
+		.unwrap_or_else(|e| panic!("{}", e.body.error));
+
+		let dest_root = target_dir.join("hello-skill");
+		let oversized = dest_root.join("oversized.bin");
+		let file = std::fs::File::create(&oversized).unwrap();
+		file.set_len(128 * 1024 * 1024 + 1).unwrap();
+		drop(file);
+
+		write_test_skill(&source_dir, "hello-skill", "upstream body");
+		let error = install_git_skill_to_dir_with_policy(
+			&source_dir.join("SKILL.md"),
+			&target_dir,
+			SkillInstallExistingMode::Update,
+			Some(&installed.folder_hash),
+		)
+		.expect_err("unhashable destination must not be replaced");
+
+		assert_eq!(error.body.code, "SKILL_HASH_FAILED");
+		assert!(error.body.error.contains("128"));
+		let dest = std::fs::read_to_string(dest_root.join("SKILL.md")).unwrap();
+		assert!(dest.contains("installed body"));
+		assert!(!dest.contains("upstream body"));
+		assert_eq!(
+			std::fs::metadata(&oversized).unwrap().len(),
+			128 * 1024 * 1024 + 1
+		);
 	}
 
 	#[test]
