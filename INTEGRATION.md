@@ -1,5 +1,77 @@
 # Integration record
 
+## 2026-09-15 — pinned pass started at 12:56 UTC
+
+This pass pins #335 `767b0cb740316c03b16da1731cdd435215f63e9c`,
+#336 `deed6e0b75a4744f4d9b19faa2ff67e22d168e2d`, and foundation
+`9ea96f2753e3eeab039d24f9e725daaa1f10db92`. Main at admission was
+`23cff34e46d9312970a18f6959b1d8763c6f4ba0`. Explicit main/task fetch
+found no duplicate issue branches.
+
+### #335 rejected
+
+The complete workspace invocation exited **101 in 1217.05 s**.
+The runner verified the exact detached revision and clean Git status
+before and after the command. This is a compile failure, not a passing
+test run. No peer source or assertions were changed.
+
+```sh
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 \
+  CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 \
+  CARGO_TARGET_DIR="$PWD/target" cargo test --workspace
+```
+
+First error onward, at most 40 lines (the diagnostic is shorter):
+
+```text
+error[E0277]: `error::ApiError` doesn't implement `std::fmt::Debug`
+    --> crates/api/src/routes/skills.rs:4292:38
+     |
+4292 |             skill_directory_hash(&source_dir).unwrap()
+     |                                               ^^^^^^ unsatisfied trait bound
+     |
+help: the trait `std::fmt::Debug` is not implemented for `error::ApiError`
+    --> crates/api/src/error.rs:15:1
+     |
+  15 | pub struct ApiError {
+     | ^^^^^^^^^^^^^^^^^^^
+     = note: add `#[derive(Debug)]` to `error::ApiError` or manually `impl std::fmt::Debug for error::ApiError`
+note: required by a bound in `Result::<T, E>::unwrap`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/result.rs:1227:4
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `aghub-api` (lib test) due to 1 previous error
+```
+
+The corresponding worker Todo note was attempted with judge identity.
+LoopX rejected it because the Todo belongs to `grok-worker-2`; this
+report and the judge integration Todo retain the owner follow-up.
+Repair the test error handling without weakening its destination-hash
+assertion, then rerun the full workspace command at the new revision.
+
+### Remaining proof at this checkpoint
+
+#336 and foundation are still in the serial full-workspace queue. No
+candidate has been merged in this pass. #336 frontend unit tests passed:
+
+```text
+ Test Files  24 passed (24)
+      Tests  133 passed (133)
+   Duration  184.08s
+```
+
+The command was `AGHUB_SKIP_SIDECAR=1 bun run test:unit`. Typecheck
+also emitted no errors. These do not substitute for workspace or
+browser acceptance. The first 76-case browser attempt was interrupted
+after startup timeouts; a second full two-file run is ongoing, with
+passes, startup timeouts and a browser page crash observed. Host memory
+pressure was observed, but it does not establish the cause of each
+failure. No assertion or timeout was relaxed. Do not treat the browser
+run as green until its final result is recorded.
+
+Native WebView, desktop visual acceptance, Windows/macOS and real
+sidecar behavior remain **missing proof**.
+
 ## 2026-09-15 — clean foundation merged; P0 settlement blocked
 
 This pass tested the initial pinned candidate set with the complete
