@@ -1,5 +1,88 @@
 # Integration record
 
+## 2026-09-15 — queue readback and issue #335 review
+
+Main remains `72f296f0317a405f96a163246eebdc77d74c668d`.
+The default fetch refspec still tracks only main. This pass ran both
+`git fetch origin` and the explicit task-head fetch:
+
+```sh
+git fetch origin '+refs/heads/task/*:refs/remotes/origin/task/*'
+git branch -r --no-merged origin/main | rg 'origin/task/'
+```
+
+Actual queue output:
+
+```text
+  origin/task/335-grok-worker-2
+  origin/task/436-grok-worker-1
+  origin/task/foundation-codex-judge
+```
+
+| Candidate at queue capture | Revision | Disposition |
+| --- | --- | --- |
+| `task/335-grok-worker-2` | `49deb6c6a82b8a54fb486f915c96fef492f75bd2` | Workspace run pending; review finding below |
+| `task/436-grok-worker-1` | `d1894b1b5dd36b8e972823dc8e0b38f90cac7e75` | Existing workspace run still compiling |
+| `task/foundation-codex-judge` | `b0dee587a92ced622af1d6a22af6107f239bc70a` | Workspace run pending; evidence changes require final-tip validation |
+
+No duplicate issue branches were found. No branch was merged.
+The judge worktree remains clean and detached at the tested #436 commit.
+At `2026-09-15T08:33:13Z`, the existing supervisor and Cargo process
+were both alive, with Cargo elapsed time `01:01:53`. Its only direct
+compiler child was compiling `cranelift_codegen`; the final result file
+was absent. No second judge build was started and the existing run was
+not interrupted. The original command is:
+
+```sh
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 \
+  CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 cargo test --workspace
+```
+
+Last eight log lines at this observation (compilation, not test results):
+
+```text
+   Compiling miniz_oxide v0.8.9
+   Compiling gix-sec v0.14.2
+   Compiling gtk v0.18.2
+   Compiling async-trait v0.1.89
+   Compiling base64 v0.23.1
+   Compiling object v0.38.1
+   Compiling leb128fmt v0.1.0
+   Compiling wasm-encoder v0.245.1
+```
+
+### Issue #335: failed destination hashing can bypass edit protection
+
+This is a **code-review finding**, not an executed reproduction or a
+workspace failure. At the captured revision,
+`crates/api/src/routes/skills.rs:659` converts a destination hash error
+to `None` with `.ok()`. The local-edit guard uses `is_some_and`, so it
+does not fire for that error. Execution then reaches
+`replace_skill_dir_staged` at line 677, even with a tracked lock hash.
+
+A concrete case to reproduce is a previously installed skill to which
+the user adds a file larger than the snapshot's 128 MiB byte limit.
+`crates/skill/src/snapshot.rs` enforces that limit; inability to hash
+the destination must preserve its contents and return a visible error.
+The worker should propagate the hash error before replacement and add
+a regression that verifies the local file survives. Existing happy-path
+update/skip tests do not cover this error path. The judge has not edited
+the worker's source or changed any tests.
+
+The attempted note write to the #335 Todo was rejected because it is
+claimed by `grok-worker-2`. No claim or peer identity was changed. This
+report and the judge-owned foundation Todo retain the review handoff.
+
+### Continuation
+
+Read the existing #436 final result and verify the actual process before
+any checkout or new build. A live process is not a green test result.
+When it exits, record the final code, duration and first 40 failure lines
+if red. Then validate #335 and the final foundation tip sequentially in
+the judge worktree. The clean-clone main baseline remains a separate
+required run. Keep the foundation Todo open; full workspace, clean-clone,
+desktop, sidecar, Windows and macOS proof remain missing.
+
 ## 2026-09-15 — issue #436 validation in progress
 
 - Main: `72f296f0317a405f96a163246eebdc77d74c668d`.
