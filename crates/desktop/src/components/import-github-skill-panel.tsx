@@ -354,7 +354,10 @@ export function ImportGithubSkillPanel({
 	});
 
 	useEffect(() => {
-		if (!scanQuery.data) return;
+		// A reset sets scanRequested=false and cancels the query, but a
+		// late fulfill can still land in the cache. Ignore that result so
+		// the empty form cannot be populated by a discarded scan.
+		if (!scanRequested || !scanQuery.isSuccess || !scanQuery.data) return;
 		const data = scanQuery.data;
 		setScanError(null);
 		gitInstall.reset();
@@ -368,10 +371,10 @@ export function ImportGithubSkillPanel({
 		setCard3Open(false);
 		setCard4Open(false);
 		setBasePhase("selecting");
-	}, [scanQuery.data]);
+	}, [scanQuery.data, scanQuery.isSuccess, scanRequested]);
 
 	useEffect(() => {
-		if (!scanQuery.isError) return;
+		if (!scanRequested || !scanQuery.isError) return;
 		const error = scanQuery.error;
 		const message =
 			error instanceof Error ? error.message : String(error);
@@ -384,6 +387,7 @@ export function ImportGithubSkillPanel({
 		scanQuery.error,
 		scanQuery.errorUpdatedAt,
 		scanQuery.isError,
+		scanRequested,
 		t,
 	]);
 
