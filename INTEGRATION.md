@@ -1,5 +1,245 @@
 # Integration record
 
+## 2026-09-15 — pinned pass started at 12:56 UTC
+
+This pass pins #335 `767b0cb740316c03b16da1731cdd435215f63e9c`,
+#336 `deed6e0b75a4744f4d9b19faa2ff67e22d168e2d`, and foundation
+`9ea96f2753e3eeab039d24f9e725daaa1f10db92`. Main at admission was
+`23cff34e46d9312970a18f6959b1d8763c6f4ba0`. Explicit main/task fetch
+found no duplicate issue branches.
+
+### #335 rejected
+
+The complete workspace invocation exited **101 in 1217.05 s**.
+The runner verified the exact detached revision and clean Git status
+before and after the command. This is a compile failure, not a passing
+test run. No peer source or assertions were changed.
+
+```sh
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 \
+  CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 \
+  CARGO_TARGET_DIR="$PWD/target" cargo test --workspace
+```
+
+First error onward, at most 40 lines (the diagnostic is shorter):
+
+```text
+error[E0277]: `error::ApiError` doesn't implement `std::fmt::Debug`
+    --> crates/api/src/routes/skills.rs:4292:38
+     |
+4292 |             skill_directory_hash(&source_dir).unwrap()
+     |                                               ^^^^^^ unsatisfied trait bound
+     |
+help: the trait `std::fmt::Debug` is not implemented for `error::ApiError`
+    --> crates/api/src/error.rs:15:1
+     |
+  15 | pub struct ApiError {
+     | ^^^^^^^^^^^^^^^^^^^
+     = note: add `#[derive(Debug)]` to `error::ApiError` or manually `impl std::fmt::Debug for error::ApiError`
+note: required by a bound in `Result::<T, E>::unwrap`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/result.rs:1227:4
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `aghub-api` (lib test) due to 1 previous error
+```
+
+The corresponding worker Todo note was attempted with judge identity.
+LoopX rejected it because the Todo belongs to `grok-worker-2`; this
+report and the judge integration Todo retain the owner follow-up.
+Repair the test error handling without weakening its destination-hash
+assertion, then rerun the full workspace command at the new revision.
+
+### Frontend unit result
+
+The command `AGHUB_SKIP_SIDECAR=1 bun run test:unit` at
+`deed6e0b` completed:
+
+```text
+ Test Files  24 passed (24)
+      Tests  133 passed (133)
+   Duration  184.08s
+```
+
+Typecheck emitted no errors in the preceding command sequence; no
+separate typecheck exit receipt was captured, so it is not counted as
+independent acceptance evidence here.
+
+### #336 withheld: compiler termination and browser failures
+
+At pinned `deed6e0b75a4744f4d9b19faa2ff67e22d168e2d`, the same full
+workspace command exited **101 in 1244.64 s**. The API lib-test compiler
+was killed by signal 9 before the tests completed. This is missing
+workspace proof; it is not evidence of a failing Rust assertion or a
+proven source defect. No judge signal was sent to this compiler. Host
+memory pressure was observed, but the specific kill cause was not established.
+
+First failure lines, with local filesystem roots abbreviated:
+
+```text
+error: could not compile `aghub-api` (lib test)
+
+Caused by:
+  process didn't exit successfully: `<rust-toolchain>/bin/rustc --crate-name aghub_api --edition=2021 crates/api/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=f5ea654fc3874c2f -C extra-filename=-446ebde14dce65be --out-dir <judge-worktree>/target/debug/deps -C incremental=<judge-worktree>/target/debug/incremental -C strip=debuginfo -L dependency=<judge-worktree>/target/debug/deps --extern aghub_cc_plugins=<judge-worktree>/target/debug/deps/libaghub_cc_plugins-4593f2a55cf78a0a.rlib --extern aghub_core=<judge-worktree>/target/debug/deps/libaghub_core-b0489d8adcb921c7.rlib --extern aghub_git=<judge-worktree>/target/debug/deps/libaghub_git-8454e9448b440387.rlib --extern aghub_inference=<judge-worktree>/target/debug/deps/libaghub_inference-b17781804b373988.rlib --extern aghub_prompt=<judge-worktree>/target/debug/deps/libaghub_prompt-ea358cd8799e9c1a.rlib --extern aghub_usage=<judge-worktree>/target/debug/deps/libaghub_usage-14e5838698cf1feb.rlib --extern anyhow=<judge-worktree>/target/debug/deps/libanyhow-77969aec8d196c0b.rlib --extern chrono=<judge-worktree>/target/debug/deps/libchrono-5d73a0e82effe236.rlib --extern dirs=<judge-worktree>/target/debug/deps/libdirs-e4b9d16c54c374f5.rlib --extern keyring=<judge-worktree>/target/debug/deps/libkeyring-60752b246ee8a60e.rlib --extern log=<judge-worktree>/target/debug/deps/liblog-0d09545a97287e0b.rlib --extern mcp_catalog=<judge-worktree>/target/debug/deps/libmcp_catalog-f17a67dc5e35d7b0.rlib --extern open=<judge-worktree>/target/debug/deps/libopen-4afeba0a5cc5e6a5.rlib --extern reqwest=<judge-worktree>/target/debug/deps/libreqwest-4af7f1cc86f43745.rlib --extern rocket=<judge-worktree>/target/debug/deps/librocket-1e0978d6d9319a4e.rlib --extern rocket_cors=<judge-worktree>/target/debug/deps/librocket_cors-3f17093c9de32824.rlib --extern serde=<judge-worktree>/target/debug/deps/libserde-dc00d36d053e7811.rlib --extern serde_json=<judge-worktree>/target/debug/deps/libserde_json-b8117fc31197a4c0.rlib --extern skill=<judge-worktree>/target/debug/deps/libskill-35c350b797596fe6.rlib --extern skill_audit=<judge-worktree>/target/debug/deps/libskill_audit-9da32e40be4f300a.rlib --extern skills_sh=<judge-worktree>/target/debug/deps/libskills_sh-cec06a662af1a0c2.rlib --extern tempfile=<judge-worktree>/target/debug/deps/libtempfile-95d8c4346baa920c.rlib --extern thiserror=<judge-worktree>/target/debug/deps/libthiserror-4956b21161e0307f.rlib --extern tokio=<judge-worktree>/target/debug/deps/libtokio-71f650b4712edd73.rlib --extern ts_rs=<judge-worktree>/target/debug/deps/libts_rs-f717fccb31ee0c4a.rlib --extern url=<judge-worktree>/target/debug/deps/liburl-80643654fb4eb8fe.rlib --extern uuid=<judge-worktree>/target/debug/deps/libuuid-e546abd925526cfb.rlib --extern which=<judge-worktree>/target/debug/deps/libwhich-f954dc675962c024.rlib -L native=<judge-worktree>/target/debug/build/aws-lc-sys-1818b2b108452816/out -L native=<judge-worktree>/target/debug/build/ring-dae84e5da64fefb2/out -L native=<judge-worktree>/target/debug/build/zstd-sys-398360a66b326e90/out -L native=<judge-worktree>/target/debug/build/libsqlite3-sys-44c49cabba7723b6/out -L native=<judge-worktree>/target/debug/build/wasmtime-3044dfac06b76f96/out` (signal: 9, SIGKILL: kill)
+```
+
+The second complete Chromium run exited **1 in 2166.88 s**. All 76
+cases in the two selected files were attempted; none were removed or
+marked skipped, and no assertion or timeout was weakened. Command:
+
+```sh
+AGHUB_SKIP_SIDECAR=1 AGHUB_E2E_SKIP_API=1 \
+  AGHUB_E2E_PORT=1441 AGHUB_E2E_API_PORT=46021 \
+  bunx playwright test e2e/list-interactions.spec.ts \
+  e2e/skill-audit.spec.ts --workers=1
+```
+
+The existing `AGHUB_E2E_SKIP_API=1` mocked-API suite configuration
+omits the real API process, not a test. This is not real API or
+native desktop acceptance. Actual final output:
+
+```text
+46 failed
+    [chromium] › e2e/list-interactions.spec.ts:183:1 › source cluster actions share one row hover surface
+    [chromium] › e2e/list-interactions.spec.ts:240:1 › custom group header stays left aligned without hover feedback
+    [chromium] › e2e/list-interactions.spec.ts:294:1 › source clusters and their members align with peer skills
+    [chromium] › e2e/list-interactions.spec.ts:488:1 › the roster labels custom-group members with the group name
+    [chromium] › e2e/list-interactions.spec.ts:626:1 › reduced motion collapses transitions to instant
+    [chromium] › e2e/list-interactions.spec.ts:655:1 › the move-to-group section appears once a group exists
+    [chromium] › e2e/list-interactions.spec.ts:677:1 › toolbar creates a group and context menu moves a skill into it
+    [chromium] › e2e/list-interactions.spec.ts:709:1 › moving a source cluster into a custom group preserves the cluster
+    [chromium] › e2e/list-interactions.spec.ts:810:1 › dragging a skill onto a group section assigns it
+    [chromium] › e2e/list-interactions.spec.ts:827:1 › dragging onto the drop-to-create zone creates a group with the item
+    [chromium] › e2e/list-interactions.spec.ts:843:1 › dragging a selected item carries the whole selection
+    [chromium] › e2e/list-interactions.spec.ts:871:1 › the drop board replaces the detail while dragging and assigns on drop
+    [chromium] › e2e/list-interactions.spec.ts:890:1 › cmd+a selects all, escape clears ────────────
+    [chromium] › e2e/list-interactions.spec.ts:946:1 › bulk and source details use the same agent coverage rows
+    [chromium] › e2e/list-interactions.spec.ts:1042:1 › dropping below a spring-opened group still hits the right target
+    [chromium] › e2e/list-interactions.spec.ts:1107:1 › right-clicking blank list space offers the page actions
+    [chromium] › e2e/list-interactions.spec.ts:1133:1 › clicking blank list space clears the selection
+    [chromium] › e2e/list-interactions.spec.ts:1252:1 › a skill row marks real content differences between copies
+    [chromium] › e2e/list-interactions.spec.ts:1329:1 › a skill row marks a failed copy status request as unknown
+    [chromium] › e2e/list-interactions.spec.ts:1355:1 › source clusters collapse by default except the selected one
+    [chromium] › e2e/list-interactions.spec.ts:1372:1 › shift range sweeps a collapsed section it crosses
+    [chromium] › e2e/list-interactions.spec.ts:1418:1 › clicking a cluster row opens its library page
+    [chromium] › e2e/list-interactions.spec.ts:1442:1 › the library agent matrix explains direct edits and reports success
+    [chromium] › e2e/list-interactions.spec.ts:1463:1 › the library agent matrix reports business failures
+    [chromium] › e2e/list-interactions.spec.ts:1486:1 › multi-select mode: clicking a cluster row toggles the library
+    [chromium] › e2e/list-interactions.spec.ts:1550:1 › escape clears the selection from the detail panel too
+    [chromium] › e2e/list-interactions.spec.ts:1569:1 › the seeded first item commits on first click instead of cancelling
+    [chromium] › e2e/list-interactions.spec.ts:1585:1 › shift-clicking an already-selected row shrinks the range
+    [chromium] › e2e/list-interactions.spec.ts:1607:1 › right-clicking a fully selected cluster keeps the selection
+    [chromium] › e2e/list-interactions.spec.ts:1638:1 › an in-page ?skill= navigation switches the detail
+    [chromium] › e2e/list-interactions.spec.ts:1655:1 › escape closes the create panel before clearing the selection
+    [chromium] › e2e/list-interactions.spec.ts:1687:1 › opening the create panel resets multi-select mode
+    [chromium] › e2e/list-interactions.spec.ts:1714:1 › a fully covered matrix cell uninstalls after confirmation
+    [chromium] › e2e/list-interactions.spec.ts:1750:1 › right-clicking an unselected item resets the selection to it
+    [chromium] › e2e/list-interactions.spec.ts:1787:1 › updating a library re-imports from its source
+    [chromium] › e2e/list-interactions.spec.ts:1838:1 › updating a private library prefills its stored credential
+    [chromium] › e2e/skill-audit.spec.ts:97:1 › a hidden warning returns when the skill assessment changes
+    [chromium] › e2e/skill-audit.spec.ts:145:1 › a non-benign Git import confirms the audited content digest without nesting a second surface
+    [chromium] › e2e/skill-audit.spec.ts:218:1 › a changed non-benign re-audit opens its findings ──
+    [chromium] › e2e/skill-audit.spec.ts:335:1 › a suspicious allowed local audit does not ask for confirmation
+    [chromium] › e2e/skill-audit.spec.ts:380:1 › Git sync audits first and confirms the same content digest before writing
+    [chromium] › e2e/skill-audit.spec.ts:491:1 › resetting a Git scan discards its late response ───
+    [chromium] › e2e/skill-audit.spec.ts:556:1 › leaving a Git import while auditing never starts the write phase
+    [chromium] › e2e/skill-audit.spec.ts:609:1 › switching branches discards the previous audit and session
+    [chromium] › e2e/skill-audit.spec.ts:701:1 › legacy Security settings link opens Skill security
+    [chromium] › e2e/skill-audit.spec.ts:713:1 › disabling automatic scans skips preview but keeps write-time assessment
+  30 passed (36.1m)
+```
+
+The automatic-scan and credential-prefill cases failed while waiting
+for the initial solo-skill row, before their feature assertions.
+Other observed failures include page crashes, initial loading timeouts,
+and dynamic-module fetch errors. The full run is red; individual failure
+causes need isolation under a stable test environment, not assumption.
+The earlier interrupted attempt is retained separately and is not part
+of this final 30-pass / 46-failure count.
+
+First 40 lines of the completed run's failure section:
+
+```text
+  1) [chromium] › e2e/list-interactions.spec.ts:183:1 › source cluster actions share one row hover surface
+
+    Test timeout of 30000ms exceeded while running "beforeEach" hook.
+
+      79 | }
+      80 |
+    > 81 | test.beforeEach(async ({ page }) => {
+         |      ^
+      82 | 	mockControl = await installMocks(page);
+      83 | 	await page.goto("/skills");
+      84 | 	await expect(
+        at <review-worktree>/crates/desktop/e2e/list-interactions.spec.ts:81:6
+
+    Tearing down "context" exceeded the test timeout of 30000ms.
+
+    Error: page.goto: Page crashed
+    Call log:
+      - navigating to "http://localhost:1441/skills", waiting until "load"
+
+
+      81 | test.beforeEach(async ({ page }) => {
+      82 | 	mockControl = await installMocks(page);
+    > 83 | 	await page.goto("/skills");
+         | 	           ^
+      84 | 	await expect(
+      85 | 		page.getByRole("option", { name: "solo-skill" }),
+      86 | 	).toBeVisible();
+        at <review-worktree>/crates/desktop/e2e/list-interactions.spec.ts:83:13
+
+    Fixture "trace recording" timeout of 30000ms exceeded during teardown.
+
+    Error Context: test-results/list-interactions-source-c-673ae-share-one-row-hover-surface-chromium/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/list-interactions-source-c-673ae-share-one-row-hover-surface-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/list-interactions-source-c-673ae-share-one-row-hover-surface-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+```
+
+The corresponding worker Todo note was attempted and rejected by the
+peer ownership guard. The judge integration Todo retains the evidence.
+A remote readback found a newer #336 revision
+`38d9a73ab01af666e6ce44530023225aa7922a74`, which changes the guard
+for late scan results after reset. The results above apply only to
+`deed6e0b`; the new revision still needs its own full workspace and
+browser validation. No #336 revision was merged in this pass.
+
+### Foundation passed and integrated
+
+Foundation at revision 9ea96f2753e3eeab039d24f9e725daaa1f10db92
+completed the same full-workspace command with **exit 0 in 1489.79 s**.
+The runner checked the pinned detached revision and clean Git status
+before and after. All workspace targets and doc tests completed.
+Representative actual output:
+
+~~~text
+test result: ok. 327 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.18s
+~~~
+
+The ignored case predates this pass; no tests were skipped or weakened.
+After fetching main again, the judge merged the tested foundation
+revision without fast-forward. The merge tree equals the tested tree.
+Push to main succeeded at 572a06439fa9021ac765591cf8c0c97d0268d783.
+Local main belongs to the canonical worktree, so this integration used
+the judge's detached checkout and an explicit HEAD:main push.
+
+The serial queue is finished; there is no ongoing foundation compiler
+to resume. The newer documentation report tip needs its own full run
+before any further merge. The new #336 revision 38d9a73a remains an
+independent validation follow-up. #335 still needs its compile fix.
+Neither feature branch was merged.
+
+Both corresponding worker Todo note writes were rejected by LoopX's
+peer ownership guard. The judge Todo holds both results and the report
+link without changing worker ownership. Native WebView, desktop visual
+acceptance, Windows/macOS and real sidecar behavior remain **missing
+proof**. The passing foundation run does not close these gaps.
+
 ## 2026-09-15 — clean foundation merged; P0 settlement blocked
 
 This pass tested the initial pinned candidate set with the complete
