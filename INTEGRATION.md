@@ -1,5 +1,69 @@
 # Integration record
 
+## 2026-09-15 — #335 compiler error and queue interruption
+
+**Not merged.** The #335 run at `49deb6c6a82b8a54fb486f915c96fef492f75bd2`
+returned Cargo exit **101** after **450.58 seconds** at
+`2026-09-15T10:33:10.927394+00:00`. Its test target did not compile:
+`ApiError` does not implement `Debug`, which the added hash assertion's
+`.unwrap()` requires. The same expression remains at line 4292 of the
+current remote tip `767b0cb7` (source review; that tip is still untested).
+Correct the test's error reporting without weakening its equality check.
+
+Actual command:
+
+```sh
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 cargo test --workspace
+```
+
+### First 40 failure lines
+
+The complete compiler failure has fewer than 40 lines:
+
+```text
+error[E0277]: `error::ApiError` doesn't implement `std::fmt::Debug`
+    --> crates/api/src/routes/skills.rs:4293:38
+     |
+4293 |             skill_directory_hash(&source_dir).unwrap()
+     |                                               ^^^^^^ unsatisfied trait bound
+     |
+help: the trait `std::fmt::Debug` is not implemented for `error::ApiError`
+    --> crates/api/src/error.rs:15:1
+     |
+  15 | pub struct ApiError {
+     | ^^^^^^^^^^^^^^^^^^^
+     = note: add `#[derive(Debug)]` to `error::ApiError` or manually `impl std::fmt::Debug for error::ApiError`
+note: required by a bound in `Result::<T, E>::unwrap`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/result.rs:1227:4
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `aghub-api` (lib test) due to 1 previous error
+```
+
+### Runner status and recovery
+
+The runner marked this result **invalidated**, then stopped before
+foundation and clean main, because its post-run check found untracked
+`bindings/`. This was caused by the judge's direct 94-test diagnostic
+rerun from the workspace root: ts-rs export tests wrote 17 generated
+TypeScript files relative to that working directory while #335 compiled.
+No tracked source changed. This is a judge diagnostic-isolation mistake,
+not a peer edit or evidence that the Cargo error did not occur.
+
+After both runner and Cargo exited, the judge verified all 17 files had
+the ts-rs generated header and moved the directory into private evidence
+storage. Nothing was deleted or committed. Future direct test-binary
+invocations must use the package working directory that Cargo uses;
+do not run extra diagnostics in a workspace owned by the serial runner.
+The original invalidated result is preserved, not relabeled as a valid
+acceptance run.
+
+The next queue will pin freshly fetched #436 `e14d3272`, #335 `767b0cb7`,
+this final foundation report commit, and clean main `72f296f0`. It will
+reuse the warmed target serially and capture fresh results without
+concurrent diagnostics. All candidates remain unmerged; clean main and
+current-tip workspace acceptance are still missing proof.
+
 ## 2026-09-15 — #436 workspace reaches tests and fails
 
 **Not merged.** The pinned #436 revision `2fa9578658d9a50b533393f6ccd6c13ff7918249`
