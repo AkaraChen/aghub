@@ -14,6 +14,11 @@ LoopX Todo `todo_78e9885160c8` owns the checkpoint and continuation state.
 
 ## Reproduction
 
+For long compilations spanning turns, use the
+[serial validation runner](validation/README.md) with a finite queue of
+pinned revisions. Its final per-entry results remain the integration gate;
+launching the queue or passing its fixture checks does not satisfy it.
+
 Use a clean clone on a disk-backed filesystem. The builder's `/tmp` is
 tmpfs and consumes RAM; do not put a workspace build there.
 

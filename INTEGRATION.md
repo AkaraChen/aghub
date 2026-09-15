@@ -1,5 +1,65 @@
 # Integration record
 
+## 2026-09-15 — pinned queue after candidate revision changed
+
+Main is still `72f296f0317a405f96a163246eebdc77d74c668d`.
+The explicit task-head fetch advanced #436 from `d1894b1b` to
+`2fa9578658d9a50b533393f6ccd6c13ff7918249`. #335 remains
+`49deb6c6a82b8a54fb486f915c96fef492f75bd2`. Foundation was
+`a8bbd2c139c61667e606f29e7aa767a01591ba4d` before this evidence change.
+There are three task branches and no duplicate issue branches.
+
+**No branch is merged.** The full workspace command on old #436 remained
+live after 1 hour 52 minutes 57 seconds. Its last observed output included:
+
+```text
+   Compiling gix-pathspec v0.20.0
+   Compiling aghub-agents v1.9.0-beta.1
+   Compiling getopts v0.2.24
+   Compiling gix-negotiate v0.35.1
+```
+
+The local path on the `aghub-agents` line is omitted. These are compilation
+lines, not failures or passing tests. The final result was absent.
+Even a later pass on `d1894b1b` cannot validate the new #436 tip.
+The delta updates API tests for the new Codex project write path and adds
+create/delete persistence coverage. Full-suite validation is still needed.
+
+### Bounded continuation plan
+
+Repeated observation-only turns have not obtained a terminal test result.
+This change adds a finite serial runner so the next validation can begin
+when its predecessor actually exits, without another heartbeat launch.
+It first waits for the existing #436 process and matching final result;
+then validates pinned #436 `2fa95786`, #335 `49deb6c6`, the final pushed
+foundation commit containing this runner, and main `72f296f0` in the
+preserved clean clone. All runs use the same single-job, no-debug-info
+profile and full workspace command with `AGHUB_SKIP_SIDECAR=1`.
+The clean clone shares only the warmed build target, not source changes.
+
+The runner never merges or pushes. It checks clean detached revisions
+before checkout and again after testing. It records nonzero test exits
+and continues with the next independent candidate. A missing predecessor
+result, source change, or dirty workspace stops the queue. The local plan,
+PID, output directory and actual launch status are recorded in the LoopX
+foundation Todo after launch. No queued candidate is yet accepted.
+
+The runner was tested with a temporary real Cargo/Git repository:
+
+```text
+PASS real Cargo queue: exit codes [0, 101, 0], pinned revisions and sidecar flag verified
+PASS dirty workspace: blocked before checkout; source preserved
+PASS used output: rejected; prior results unchanged
+PASS predecessor: waits for process exit and matching result, then runs Cargo
+PASS duplicate runner: rejected while first runner retains ownership
+PASS missing predecessor result: blocked without starting Cargo
+```
+
+These checks validate evidence collection, not agHub. The #335 hash-error
+review finding below remains open. The foundation Todo stays open until
+its clean-clone full command exits successfully. Per-platform and sidecar
+proof remains missing. See [runner instructions](docs/validation/README.md).
+
 ## 2026-09-15 — queue readback and issue #335 review
 
 Main remains `72f296f0317a405f96a163246eebdc77d74c668d`.
