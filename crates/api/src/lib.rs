@@ -551,6 +551,7 @@ mod tests {
 						reference: Some("main".to_string()),
 					},
 					credential_token: None,
+					credential_id: None,
 					branches: vec!["main".to_string()],
 					scanned_skill_paths: scanned_skill_paths
 						.iter()

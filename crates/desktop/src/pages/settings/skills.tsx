@@ -497,10 +497,15 @@ export default function SkillsPage() {
 				items.flatMap((item) => Array.from(skillTargetIds(item))),
 			);
 		});
+		const credentialId =
+			entries
+				.map((item) => item.credentialId)
+				.find((id): id is string => Boolean(id)) ?? null;
 		return {
 			title: focusedSource,
 			url,
 			sourceType,
+			credentialId,
 			members,
 			installedAt,
 			updatedAt,
@@ -728,6 +733,10 @@ export default function SkillsPage() {
 								<LazyImportGithubSkillPanel
 									initialUrl={
 										focusedSourceInfo?.url ?? undefined
+									}
+									autoScan
+									initialCredentialId={
+										focusedSourceInfo?.credentialId ?? null
 									}
 									onDone={() => setPanelMode(null)}
 								/>

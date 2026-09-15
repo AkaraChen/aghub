@@ -953,12 +953,14 @@ fn map_repo_discovery_error(error: skill::RepoDiscoveryError) -> ApiError {
 fn install_lock_source_from_resolved(
 	source: &aghub_git::ResolvedRemoteSource,
 	ref_name: Option<String>,
+	credential_id: Option<String>,
 ) -> skill::InstallLockSource {
 	skill::InstallLockSource {
 		source: source.lock_source(),
 		source_type: source.source_type.as_str().to_string(),
 		source_url: source.source_url.clone(),
 		ref_name,
+		credential_id,
 	}
 }
 
@@ -1372,6 +1374,7 @@ fn import_skill_blocking(
 		source_type: "local".to_string(),
 		source_url: request.path,
 		ref_name: None,
+		credential_id: None,
 	};
 	let imported = match manager.add_skill_from_snapshot_with_commit(
 		audit.snapshot(&import_path),
@@ -1965,11 +1968,16 @@ pub async fn install_skill(
 			aghub_git::resolve_remote_source(&session.provenance.source)
 				.map_err(map_remote_source_error)?;
 		let path = session.temp_dir.path().to_path_buf();
+		let credential_id = session.credential_id.clone();
 		session_lease = Some(session);
 		(
 			path,
 			session_id,
-			install_lock_source_from_resolved(&session_source, None),
+			install_lock_source_from_resolved(
+				&session_source,
+				None,
+				credential_id,
+			),
 		)
 	} else {
 		let clone_url_for_task = clone_url.clone();
@@ -2026,7 +2034,7 @@ pub async fn install_skill(
 		(
 			path,
 			session_id,
-			install_lock_source_from_resolved(&source, None),
+			install_lock_source_from_resolved(&source, None, None),
 		)
 	};
 
@@ -2066,6 +2074,7 @@ pub async fn install_skill(
 						reference: None,
 					},
 					credential_token: None,
+					credential_id: None,
 					branches: Vec::new(),
 					scanned_skill_paths: HashSet::new(),
 				},
@@ -2316,6 +2325,7 @@ pub fn get_global_skill_lock(
 			installed_at: entry.installed_at,
 			updated_at: entry.updated_at,
 			plugin_name: entry.plugin_name,
+			credential_id: entry.credential_id,
 		})
 		.collect();
 
@@ -2606,6 +2616,7 @@ pub async fn git_scan_skills(
 					.then(|| current_branch.clone()),
 			},
 			credential_token,
+			credential_id: req.credential_id.clone(),
 			branches: branches.clone(),
 			scanned_skill_paths,
 		},
@@ -2672,6 +2683,7 @@ pub async fn git_install_skills(
 			install_lock_source_from_resolved(
 				&resolved,
 				session.provenance.reference.clone(),
+				session.credential_id.clone(),
 			),
 			session.scanned_skill_paths.clone(),
 		)
@@ -2815,6 +2827,16 @@ pub async fn git_sync_skill(
 	)?;
 	let temp_path = session.temp_dir.path().to_path_buf();
 	let scanned_skill_paths = session.scanned_skill_paths.clone();
+	let lock_source = {
+		let resolved =
+			aghub_git::resolve_remote_source(&session.provenance.source)
+				.map_err(map_remote_source_error)?;
+		install_lock_source_from_resolved(
+			&resolved,
+			session.provenance.reference.clone(),
+			session.credential_id.clone(),
+		)
+	};
 
 	// Full path of the SKILL.md (or skill dir) inside the clone
 	let (_, cloned_skill_path) = validate_scanned_skill_path(
@@ -2880,6 +2902,16 @@ pub async fn git_sync_skill(
 	// Replace each installation path
 	for target_dir in &target_dirs {
 		replace_skill_dir_staged(reviewed_skill_dir, target_dir)?;
+	}
+
+	if let Some(skill_name) = skill_name.as_deref() {
+		write_skill_install_lock(
+			skill_name,
+			resource_scope,
+			project_root.as_deref(),
+			&lock_source,
+			Some(skill::lock_skill_file_path(&req.skill_path)),
+		)?;
 	}
 
 	// Remove session (drops TempDir, cleans up disk)

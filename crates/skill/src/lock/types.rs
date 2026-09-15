@@ -35,6 +35,14 @@ pub struct SkillLockEntry {
 	/// Name of the plugin this skill belongs to (if any)
 	#[serde(rename = "pluginName", skip_serializing_if = "Option::is_none")]
 	pub plugin_name: Option<String>,
+	/// Credentials-store id used to clone this source, if any.
+	/// Stores only the id, never the token.
+	#[serde(
+		rename = "credentialId",
+		default,
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub credential_id: Option<String>,
 }
 
 /// Tracks dismissed prompts so they're not shown again.
@@ -111,6 +119,43 @@ impl SkillLockEntry {
 			installed_at: now.clone(),
 			updated_at: now,
 			plugin_name,
+			credential_id: None,
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::SkillLockEntry;
+
+	#[test]
+	fn lock_entry_without_credential_id_deserializes() {
+		let entry: SkillLockEntry = serde_json::from_str(
+			r#"{
+				"source": "owner/repo",
+				"sourceType": "github",
+				"sourceUrl": "https://github.com/owner/repo",
+				"skillFolderHash": "hash",
+				"installedAt": "2026-01-01T00:00:00Z",
+				"updatedAt": "2026-01-01T00:00:00Z"
+			}"#,
+		)
+		.unwrap();
+		assert_eq!(entry.credential_id, None);
+	}
+
+	#[test]
+	fn lock_entry_omits_absent_credential_id() {
+		let json = serde_json::to_value(SkillLockEntry::new(
+			"owner/repo".into(),
+			"github".into(),
+			"https://github.com/owner/repo".into(),
+			None,
+			None,
+			"hash".into(),
+			None,
+		))
+		.unwrap();
+		assert!(json.get("credentialId").is_none());
 	}
 }

@@ -23,8 +23,8 @@ import {
 	TextField,
 	toast,
 } from "@heroui/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import type {
@@ -36,10 +36,7 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useAuditedMutation } from "../hooks/use-audited-mutation";
 import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
-import {
-	type AuditedSkillRun,
-	useAuditedSkillRun,
-} from "../hooks/use-audited-skill-run";
+import { useAuditedSkillRun } from "../hooks/use-audited-skill-run";
 import { supportsIndividualSkillTarget } from "../lib/agent-capabilities";
 import { cn } from "../lib/utils";
 import { CreateCredentialDialog } from "../pages/settings/components/create-credential-dialog";
@@ -54,6 +51,10 @@ export interface ImportGithubSkillPanelProps {
 	/** Pre-fills the repository URL — used by a library's "update from
 	 * source", which re-imports from the same repo. */
 	initialUrl?: string;
+	/** When true and `initialUrl` is set, scan as soon as the panel opens. */
+	autoScan?: boolean;
+	/** Prefill the private-repo credential when the lock still has that id. */
+	initialCredentialId?: string | null;
 }
 
 const ADD_TOKEN_SENTINEL = "__add_token__";
@@ -73,12 +74,6 @@ interface GitInstallCandidate {
 	readonly agents: readonly string[];
 	readonly scope: "global" | "project";
 	readonly projectRoot: string | null;
-}
-
-interface GitBranchScanCandidate {
-	readonly branch: string;
-	readonly sessionId: string;
-	readonly url: string;
 }
 
 type Phase =
@@ -107,14 +102,15 @@ export function ImportGithubSkillPanel({
 	onDone,
 	projectPath,
 	initialUrl,
+	autoScan = false,
+	initialCredentialId = null,
 }: ImportGithubSkillPanelProps) {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 	const { skillAuditEnabled, skillAuditReady } = useSkillAuditPreference();
-	const { beginAuditedSkillRun, invalidateAuditedSkillRun } =
-		useAuditedSkillRun();
+	const { invalidateAuditedSkillRun } = useAuditedSkillRun();
 
 	const skillAgents = useMemo(
 		() =>
@@ -147,10 +143,22 @@ export function ImportGithubSkillPanel({
 	const [previewSkill, setPreviewSkill] = useState<GitScanSkillEntry | null>(
 		null,
 	);
+	const [scanRequested, setScanRequested] = useState(
+		() => Boolean(autoScan && initialUrl),
+	);
+	const [scanBranch, setScanBranch] = useState<string | null>(null);
+	const [initialCredentialResolved, setInitialCredentialResolved] = useState(
+		() => !initialCredentialId,
+	);
+	const lastSessionIdRef = useRef<string | null>(null);
 
-	const { data: credentials = [] } = useQuery({
-		...credentialsListQueryOptions({ api, enabled: isPrivateRepo }),
+	const credentialsQuery = useQuery({
+		...credentialsListQueryOptions({
+			api,
+			enabled: isPrivateRepo || Boolean(initialCredentialId),
+		}),
 	});
+	const credentials = credentialsQuery.data ?? [];
 
 	const {
 		control,
@@ -301,78 +309,98 @@ export function ImportGithubSkillPanel({
 				? false
 				: card4Open;
 
-	const scanMutation = useMutation({
-		mutationFn: (run: AuditedSkillRun<InputFormValues>) =>
-			api.skills.gitScan({
-				url: run.candidate.url.trim(),
-				credential_id: run.candidate.credentialId || null,
-				branch: null,
-				session_id: null,
-				skip_audit: !skillAuditEnabled,
-			}),
-		onSuccess: (data, run) => {
-			if (!run.isCurrent()) return;
-			setScanError(null);
-			gitInstall.reset();
-			setScannedSkills(data.skills);
-			setSessionId(data.session_id);
-			setBranches(data.branches);
-			setCurrentBranch(data.current_branch);
-			setSelectedPaths(new Set(data.skills.map((s) => s.path)));
-			setCard1Open(false);
-			setCard2Open(true);
-			setBasePhase("selecting");
-		},
-		onError: (error, run) => {
-			if (!run.isCurrent()) return;
-			const message =
-				error instanceof Error ? error.message : String(error);
-			setScanError(message);
-			toast.danger(t("scanFailed"), {
-				description: t("scanFailedHint"),
-			});
+	useEffect(() => {
+		if (!initialCredentialId || initialCredentialResolved) return;
+		if (!credentialsQuery.isFetched) return;
+		if (credentials.some((credential) => credential.id === initialCredentialId)) {
+			setIsPrivateRepo(true);
+			setValue("credentialId", initialCredentialId);
+		}
+		setInitialCredentialResolved(true);
+	}, [
+		credentials,
+		credentialsQuery.isFetched,
+		initialCredentialId,
+		initialCredentialResolved,
+		setValue,
+	]);
+
+	const scanUrl = urlValue.trim();
+	const scanCredentialId = isPrivateRepo ? credentialIdValue || null : null;
+	const scanEnabled =
+		scanRequested &&
+		Boolean(scanUrl) &&
+		skillAuditReady &&
+		initialCredentialResolved &&
+		(!isPrivateRepo || Boolean(scanCredentialId));
+
+	const scanQuery = useQuery({
+		queryKey: ["git-scan", scanUrl, scanBranch, scanCredentialId],
+		enabled: scanEnabled,
+		queryFn: async ({ signal }) => {
+			const data = await api.skills.gitScan(
+				{
+					url: scanUrl,
+					credential_id: scanCredentialId,
+					branch: scanBranch,
+					session_id: lastSessionIdRef.current,
+					skip_audit: !skillAuditEnabled,
+				},
+				signal,
+			);
+			lastSessionIdRef.current = data.session_id;
+			return data;
 		},
 	});
 
-	const branchScanMutation = useMutation({
-		mutationFn: (run: AuditedSkillRun<GitBranchScanCandidate>) =>
-			api.skills.gitScan({
-				url: run.candidate.url,
-				credential_id: null,
-				branch: run.candidate.branch,
-				session_id: run.candidate.sessionId,
-				skip_audit: !skillAuditEnabled,
-			}),
-		onSuccess: (data, run) => {
-			if (!run.isCurrent()) return;
-			gitInstall.reset();
-			setScannedSkills(data.skills);
-			setSessionId(data.session_id);
-			setCurrentBranch(data.current_branch);
-			setSelectedPaths(new Set(data.skills.map((s) => s.path)));
-			setCard2Open(true);
-			setCard3Open(false);
-			setCard4Open(false);
-			setBasePhase("selecting");
-		},
-		onError: (error, run) => {
-			if (!run.isCurrent()) return;
-			const message =
-				error instanceof Error ? error.message : String(error);
-			toast.danger(t("scanFailed"), {
-				description: message,
-			});
-		},
-	});
+	useEffect(() => {
+		if (!scanQuery.data) return;
+		const data = scanQuery.data;
+		setScanError(null);
+		gitInstall.reset();
+		setScannedSkills(data.skills);
+		setSessionId(data.session_id);
+		setBranches(data.branches);
+		setCurrentBranch(data.current_branch);
+		setSelectedPaths(new Set(data.skills.map((s) => s.path)));
+		setCard1Open(false);
+		setCard2Open(true);
+		setCard3Open(false);
+		setCard4Open(false);
+		setBasePhase("selecting");
+	}, [scanQuery.data]);
+
+	useEffect(() => {
+		if (!scanQuery.isError) return;
+		const error = scanQuery.error;
+		const message =
+			error instanceof Error ? error.message : String(error);
+		setScanError(message);
+		toast.danger(t("scanFailed"), {
+			description: scanBranch ? message : t("scanFailedHint"),
+		});
+	}, [
+		scanBranch,
+		scanQuery.error,
+		scanQuery.errorUpdatedAt,
+		scanQuery.isError,
+		t,
+	]);
 
 	const handleScan = (values: InputFormValues) => {
 		if (!skillAuditReady) return;
 		setScanError(null);
-		const run = beginAuditedSkillRun({
-			...values,
-			selectedAgents: [...values.selectedAgents],
+		setScanBranch(null);
+		lastSessionIdRef.current = null;
+		setScanRequested(true);
+		void queryClient.invalidateQueries({
+			queryKey: [
+				"git-scan",
+				values.url.trim(),
+				null,
+				isPrivateRepo ? values.credentialId || null : null,
+			],
 		});
-		scanMutation.mutate(run);
 	};
 
 	const handleBranchScan = (branch: string) => {
@@ -388,12 +416,8 @@ export function ImportGithubSkillPanel({
 		setCard3Open(false);
 		setCard4Open(false);
 		setBasePhase("selecting");
-		const run = beginAuditedSkillRun<GitBranchScanCandidate>({
-			branch,
-			sessionId,
-			url: urlValue.trim(),
-		});
-		branchScanMutation.mutate(run);
+		setScanBranch(branch);
+		setScanRequested(true);
 	};
 
 	const createInstallCandidate = (agents: string[]): GitInstallCandidate => ({
@@ -457,8 +481,10 @@ export function ImportGithubSkillPanel({
 		setCard3Open(false);
 		setCard4Open(false);
 		setBasePhase("scanning");
-		scanMutation.reset();
-		branchScanMutation.reset();
+		setScanBranch(null);
+		lastSessionIdRef.current = null;
+		void queryClient.removeQueries({ queryKey: ["git-scan"] });
+		setScanRequested(Boolean(autoScan && initialUrl));
 	};
 
 	// Card 1 toggle: re-opening resets everything back to scanning
@@ -477,8 +503,10 @@ export function ImportGithubSkillPanel({
 			setCard3Open(false);
 			setCard4Open(false);
 			setBasePhase("scanning");
-			scanMutation.reset();
-			branchScanMutation.reset();
+			setScanBranch(null);
+			lastSessionIdRef.current = null;
+			void queryClient.removeQueries({ queryKey: ["git-scan"] });
+			setScanRequested(Boolean(autoScan && urlValue.trim()));
 		}
 		setCard1Open((v) => !v);
 	};
@@ -528,7 +556,8 @@ export function ImportGithubSkillPanel({
 	const card3Active =
 		(skillAuditEnabled && phase === "auditing") || phase === "review";
 	const card4Active = phase === "installing" || phase === "done";
-	const isBranchSwitching = branchScanMutation.isPending;
+	const isBranchSwitching =
+		scanQuery.isFetching && scanBranch !== null;
 
 	const card2Reached = cardReached(2, phase);
 	const card3Reached = showAuditStep && cardReached(3, phase);
@@ -797,13 +826,13 @@ export function ImportGithubSkillPanel({
 										<Button
 											type="submit"
 											isDisabled={
-												scanMutation.isPending ||
+												scanQuery.isFetching ||
 												isSubmitting ||
 												!skillAuditReady ||
 												skillAgents.length === 0
 											}
 										>
-											{scanMutation.isPending ? (
+											{scanQuery.isFetching ? (
 												<span className="flex items-center gap-2">
 													<Spinner
 														size="sm"

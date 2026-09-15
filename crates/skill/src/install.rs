@@ -22,6 +22,7 @@ pub struct InstallLockSource {
 	pub source_type: String,
 	pub source_url: String,
 	pub ref_name: Option<String>,
+	pub credential_id: Option<String>,
 }
 
 /// One installed skill to record in a lock-file batch.
@@ -232,6 +233,7 @@ pub fn write_global_install_locks(
 					installed_at,
 					updated_at: now.clone(),
 					plugin_name: None,
+					credential_id: source.credential_id.clone(),
 				},
 			);
 		}
@@ -306,6 +308,7 @@ mod tests {
 			source_type: "github".to_string(),
 			source_url: "https://github.com/owner/repo.git".to_string(),
 			ref_name: Some("main".to_string()),
+			credential_id: None,
 		}
 	}
 
@@ -379,6 +382,7 @@ mod tests {
 				source_type: "github".to_string(),
 				source_url: "https://github.com/owner/repo.git".to_string(),
 				ref_name: Some("main".to_string()),
+				credential_id: None,
 			},
 			dir.path(),
 		)
@@ -409,6 +413,7 @@ mod tests {
 				installed_at: installed_at.clone(),
 				updated_at: installed_at.clone(),
 				plugin_name: None,
+				credential_id: None,
 			},
 		);
 		global::write_skill_lock(&initial).unwrap();
@@ -441,6 +446,7 @@ mod tests {
 			source_type: "github".to_string(),
 			source_url: "https://github.com/other/repo.git".to_string(),
 			ref_name: Some("main".to_string()),
+			credential_id: None,
 		};
 
 		let error = write_global_install_locks(
@@ -487,6 +493,7 @@ mod tests {
 			source_type: "github".to_string(),
 			source_url: "https://github.com/other/repo.git".to_string(),
 			ref_name: Some("main".to_string()),
+			credential_id: None,
 		};
 
 		let error = write_project_install_locks(
@@ -548,6 +555,23 @@ mod tests {
 
 		assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
 		assert_eq!(std::fs::read_to_string(path).unwrap(), "not json");
+	}
+
+	#[test]
+	fn global_lock_records_credential_id_without_token() {
+		let _guard = TestLockGuard::new();
+		let mut source = source();
+		source.credential_id = Some("cred-1".to_string());
+		write_global_install_locks(&source, &[update("demo", "hash")]).unwrap();
+		let stored = global::read_skill_lock();
+		assert_eq!(
+			stored.skills["demo"].credential_id.as_deref(),
+			Some("cred-1")
+		);
+		let json =
+			std::fs::read_to_string(global::get_skill_lock_path()).unwrap();
+		assert!(json.contains("\"credentialId\": \"cred-1\""));
+		assert!(!json.to_lowercase().contains("token"));
 	}
 
 	#[test]

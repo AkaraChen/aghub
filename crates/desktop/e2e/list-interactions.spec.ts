@@ -1805,9 +1805,8 @@ test("updating a library re-imports from its source", async ({ page }) => {
 		"https://github.com/AkaraChen/alpha-pack",
 	);
 
-	// Scan lists the repo content (all selected by default), install
-	// skips the two existing members and adds fresh-skill + its lock
-	await page.getByRole("button", { name: "Scan", exact: true }).click();
+	// Update-source auto-scans the lock URL; install skips the two
+	// existing members and adds fresh-skill + its lock
 	await expect(page.getByText("fresh-skill description")).toBeVisible();
 	await page.getByRole("button", { name: "Install Selected" }).click();
 	await page.getByRole("button", { name: "Done", exact: true }).click();
@@ -1825,4 +1824,22 @@ test("updating a library re-imports from its source", async ({ page }) => {
 			.getByTestId("group-section-github/AkaraChen/alpha-pack")
 			.getByRole("option", { name: "fresh-skill" }),
 	).toBeVisible();
+});
+
+test("updating a private library prefills its stored credential", async ({
+	page,
+}) => {
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		})
+		.click();
+	await page.getByRole("button", { name: "Update from source" }).click();
+	await expect(
+		page.getByRole("heading", { name: "Import Remote Source" }),
+	).toBeVisible();
+	await expect(page.getByLabel("Private repo?")).toBeChecked();
+	await expect(page.getByLabel("Credentials")).toContainText("gh-pat");
+	await expect(page.getByText("fresh-skill description")).toBeVisible();
 });

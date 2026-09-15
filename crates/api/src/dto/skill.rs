@@ -490,6 +490,9 @@ pub struct SkillLockEntryResponse {
 	pub updated_at: String,
 	#[serde(rename = "pluginName", skip_serializing_if = "Option::is_none")]
 	pub plugin_name: Option<String>,
+	#[serde(rename = "credentialId", skip_serializing_if = "Option::is_none")]
+	#[ts(optional = nullable)]
+	pub credential_id: Option<String>,
 }
 
 /// Response for the global skill lock file

@@ -13,4 +13,5 @@ export type SkillLockEntryResponse = {
 	installedAt: string;
 	updatedAt: string;
 	pluginName: string | null;
+	credentialId?: string | null;
 };

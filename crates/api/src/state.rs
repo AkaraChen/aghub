@@ -29,6 +29,8 @@ pub struct GitCloneSession {
 	pub provenance: GitCloneSessionProvenance,
 	/// Resolved credential token, if any.
 	pub credential_token: Option<String>,
+	/// Credentials-store id used for this clone, if any. Never the token.
+	pub credential_id: Option<String>,
 	/// Cached list of remote branch names.
 	pub branches: Vec<String>,
 	/// Normalized relative skill paths returned by the scan.
@@ -141,6 +143,7 @@ mod tests {
 				reference: Some("main".to_string()),
 			},
 			credential_token: None,
+			credential_id: None,
 			branches: vec!["main".to_string()],
 			scanned_skill_paths: HashSet::new(),
 		}

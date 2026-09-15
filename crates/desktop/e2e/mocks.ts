@@ -155,7 +155,11 @@ const benignAudit = (contentDigest: string) => ({
 const auditDigest = (paths: unknown) =>
 	`e2e:${Array.isArray(paths) ? [...paths].map(String).sort().join("|") : ""}`;
 
-const lockEntry = (name: string, source: string) => ({
+const lockEntry = (
+	name: string,
+	source: string,
+	credentialId: string | null = null,
+) => ({
 	name,
 	source,
 	sourceType: "github",
@@ -165,6 +169,7 @@ const lockEntry = (name: string, source: string) => ({
 	installedAt: "2026-01-01T00:00:00Z",
 	updatedAt: "2026-01-01T00:00:00Z",
 	pluginName: null,
+	credentialId,
 });
 
 const GLOBAL_LOCK = {
@@ -172,8 +177,8 @@ const GLOBAL_LOCK = {
 	skills: [
 		lockEntry("react-pro", "github/AkaraChen/web-dev"),
 		lockEntry("css-wizard", "github/AkaraChen/web-dev"),
-		lockEntry("arch-lint", "github/AkaraChen/alpha-pack"),
-		lockEntry("api-forge", "github/AkaraChen/alpha-pack"),
+		lockEntry("arch-lint", "github/AkaraChen/alpha-pack", "cred-1"),
+		lockEntry("api-forge", "github/AkaraChen/alpha-pack", "cred-1"),
 	],
 	lastSelectedAgents: null,
 };
@@ -513,6 +518,8 @@ export async function installMocks(page: Page) {
 				body: JSON.stringify({ code, error }),
 			});
 
+		if (p === "/credentials")
+			return json([{ id: "cred-1", name: "gh-pat" }]);
 		if (p === "/agents") return json(agents);
 		if (p === "/agents/availability") return json(availability);
 		if (p === "/agents/all/skills") return json(skills);
