@@ -38,6 +38,22 @@ Limiting build jobs changes concurrency, not the test selection. Keep the
 workspace member set, assertions, and test features unchanged. Do not use
 package-only runs as evidence that the full integration gate passed.
 
+For a memory-constrained retry, record these environment overrides with
+the result:
+
+```sh
+CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 \
+  CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 cargo test --workspace
+```
+
+The debug profile settings disable debug information, not debug
+assertions or tests. They change the build fingerprint, so expect
+dependency recompilation. To investigate interference from the shared
+compiler cache, prefix the same command with `RUSTC_WRAPPER=`. This
+disables the wrapper for that invocation without stopping the shared
+sccache server. Record each attempt separately, including interruption
+and its reason; do not combine partial runs into a passing result.
+
 The repository enables `sccache` in `.cargo/config.toml`. Linux workspace
 builds include the Tauri crate and require the native development packages
 listed in `.github/workflows/ci.yml`: `libgtk-3-dev`,
@@ -102,15 +118,100 @@ fails, record the new failure before proposing changes to the build
 profile or builder resources. No tests, assertions, or workflows were
 changed for these attempts.
 
+## Integration retry — 2026-09-15
+
+The judge retried the full workspace on the foundation branch at
+`3a6c70998472db3752b70a0401fac744dfcffd4c`, using a disk-backed worktree.
+Rust source and tests matched the recorded main baseline; the branch
+contained the validation document. Documentation corrections made during
+the retry did not change Rust source, manifests, configuration, or tests.
+
+The first retry used:
+
+```sh
+CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 \
+  CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 cargo test --workspace
+```
+
+After **334.00 seconds**, the judge interrupted this attempt with SIGINT
+to investigate slow progress through the shared compiler cache. The
+subprocess return code was **-2**. Its complete output was:
+
+```text
+    Blocking waiting for file lock on package cache
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling proc-macro2 v1.0.106
+   Compiling syn v2.0.117
+   Compiling serde v1.0.228
+   Compiling serde_derive v1.0.228
+   Compiling equivalent v1.0.2
+   Compiling serde_core v1.0.228
+   Compiling cfg-if v1.0.4
+   Compiling memchr v2.8.0
+   Compiling libc v0.2.189
+```
+
+No test result was produced. The log does not establish a cache defect.
+Only the Cargo process in the judge worktree was interrupted; the shared
+cache server and other workers' builds were left running.
+
+The second retry bypassed only the compiler wrapper:
+
+```sh
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 cargo test --workspace
+```
+
+It ran for **1680.00 seconds (28 minutes)** before the judge
+sent SIGINT to end this bounded attempt; the subprocess return code was
+**-2**. The last output was:
+
+```text
+   Compiling kuchikiki v0.8.8-speedreader
+   Compiling toml v1.1.2+spec-1.1.0
+   Compiling plist v1.8.0
+   Compiling serde_with v3.18.0
+   Compiling tauri-utils v2.9.3
+```
+
+No test binary ran and no compiler error was emitted. This is **incomplete
+validation**, not a failing-test verdict or a pass. At one observation,
+`/proc/pressure/memory` reported `full avg60=35.24`; immediately before
+interruption it reported `full avg60=24.49`. The machine had no swap and
+about 1.1–2.5 GiB available memory during the attempt. This establishes
+shared resource pressure, not the cause of the earlier SIGKILL or a
+specific compiler-cache bug.
+
+Both retries retained all tests and assertions. The warmed target directory
+is preserved. Next: inspect memory headroom and pressure, then resume the
+same direct, single-job command in the judge worktree without changing
+profiles again. Obtain a complete exit result before integration, then
+finish the clean-clone baseline checkpoint. No branch was merged in this
+pass. See `INTEGRATION.md` for the candidate disposition and output excerpt.
+
 ## Integration decision
 
-The initial `git fetch origin` succeeded. Running
-`git branch -r --no-merged origin/main` returned no branches, so there
-were no task candidates to test or merge in that pass.
+The initial `git fetch origin` succeeded and
+`git branch -r --no-merged origin/main` returned no branches. A subsequent
+inspection found that the configured fetch refspec tracked only `main`;
+that empty local list did not prove that no remote task branches existed.
+Fetch task heads explicitly before interpreting the integration queue:
+
+```sh
+git fetch origin '+refs/heads/main:refs/remotes/origin/main' \
+  '+refs/heads/task/*:refs/remotes/origin/task/*'
+git branch -r --no-merged origin/main | rg 'origin/task/'
+```
+
+The corrective full-head fetch on 2026-09-15 found one unmerged task
+branch: `task/foundation-codex-judge` at
+`3a6c70998472db3752b70a0401fac744dfcffd4c`. The main tip was still
+`72f296f0317a405f96a163246eebdc77d74c668d`.
 
 For subsequent candidates:
 
-1. Fetch and record the remote task branch tip and current `origin/main`.
+1. Fetch main and task heads explicitly, then record the remote task
+   branch tip and current `origin/main`.
 2. Check out the candidate in the judge's worktree and run
    `AGHUB_SKIP_SIDECAR=1 cargo test --workspace` to completion.
 3. If red, leave the candidate unmerged. Record the first 40 lines of the
