@@ -81,9 +81,49 @@ does not validate ccusage execution or a distributable desktop bundle.
 | WebKitGTK / JavaScriptCoreGTK (`pkg-config`) | `2.52.6` / `2.52.6` |
 | Machine RAM / swap | 15 GiB / no swap |
 
-## Baseline evidence
+## Passing clean-clone baseline — 2026-09-15
 
-**Baseline failed during compilation; no passing baseline is claimed.**
+The clean source clone at
+`72f296f0317a405f96a163246eebdc77d74c668d` passed the full workspace
+command. It started at `10:50:07 UTC`, finished at `10:59:23 UTC`, and
+returned **exit 0 in 555.44 seconds**. The queue checked the detached
+commit and empty Git status before and after execution. This is evidence
+for that baseline revision; later integration candidates need their own
+results.
+
+```sh
+export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/.local/share/fnm/node-versions/v24.20.0/installation/bin:$PATH"
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 \
+  CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 \
+  CARGO_TARGET_DIR="$HOME/Developer/aghub-judge/target" \
+  cargo test --workspace
+```
+
+The clone reused the judge's warmed target directory. Elapsed time
+includes compilation and package-cache lock waits, so it is neither a
+cold-build benchmark nor a guaranteed duration for another machine.
+Selected actual output:
+
+```text
+    Finished `test` profile [unoptimized] target(s) in 8m 50s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 326 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.24s
+test result: ok. 92 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 230 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+```
+
+The failing-test set is empty for this completed run. Existing ignored
+tests and ignored documentation examples remain outside its coverage;
+this work adds no ignores or filters. The build warned that the ccusage
+placeholder is non-functional and that `proc-macro-error2 v2.0.1` has a
+future Rust incompatibility. Native desktop, Windows/macOS and real
+sidecar acceptance remain missing proof.
+
+## Historical baseline attempts
+
+These earlier attempts failed or were interrupted during compilation.
+The passing result above supersedes their baseline status without
+discarding their failure evidence.
 
 | Attempt | Command | Elapsed | Result |
 | --- | --- | --- | --- |

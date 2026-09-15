@@ -1,5 +1,58 @@
 # Integration record
 
+## 2026-09-15 — clean baseline passes; #335 rejection reproduced
+
+The clean clone at `72f296f0317a405f96a163246eebdc77d74c668d`
+completed the full workspace test at `10:59:23 UTC`: exit **0**, elapsed
+**555.44 seconds**. See [the baseline receipt](docs/builder-validation.md#passing-clean-clone-baseline--2026-09-15).
+
+The next integration pass fetched main and all task heads explicitly.
+It pinned #335 `767b0cb7`, #336 `a14ff6ef`, #436 `4b1ad9de`, and the
+foundation documentation branch. There were no duplicate task branches
+for an issue in this snapshot. Each candidate requires its own full run.
+
+#335 failed again at `11:05:14 UTC`: exit **101**, elapsed **147.37
+seconds**, on `767b0cb740316c03b16da1731cdd435215f63e9c`.
+The test target cannot compile; no passing workspace receipt exists.
+Do not merge it. The branch owner must fix the test compilation failure
+and rerun the full workspace; the judge made no changes to its code.
+
+Command used for both results (the baseline used the clean clone as cwd):
+
+```sh
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 \
+  CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 \
+  CARGO_TARGET_DIR="$HOME/Developer/aghub-judge/target" \
+  cargo test --workspace
+```
+
+Failure output from the first error onward (at most 40 lines):
+
+```text
+error[E0277]: `error::ApiError` doesn't implement `std::fmt::Debug`
+    --> crates/api/src/routes/skills.rs:4292:38
+     |
+4292 |             skill_directory_hash(&source_dir).unwrap()
+     |                                               ^^^^^^ unsatisfied trait bound
+     |
+help: the trait `std::fmt::Debug` is not implemented for `error::ApiError`
+    --> crates/api/src/error.rs:15:1
+     |
+  15 | pub struct ApiError {
+     | ^^^^^^^^^^^^^^^^^^^
+     = note: add `#[derive(Debug)]` to `error::ApiError` or manually `impl std::fmt::Debug for error::ApiError`
+note: required by a bound in `Result::<T, E>::unwrap`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/result.rs:1227:4
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `aghub-api` (lib test) due to 1 previous error
+```
+
+The requested cross-peer Todo note was attempted with judge identity
+and an explicit integration authority reason. LoopX rejected it because
+the Todo belongs to `grok-worker-2`. The failure is retained here and in
+the judge's foundation Todo; no peer identity was impersonated.
+
 ## 2026-09-15 — current #436 passes; current #335 fails
 
 The serial queue produced fresh, clean-worktree results for the current
