@@ -1,5 +1,181 @@
 # Integration record
 
+## 2026-09-15 — current #436 integrated; #335 and #336 rejected
+
+Explicitly fetching `refs/heads/main` and `refs/heads/task/*` found four
+candidates. The default remote fetch refspec updates only main and left
+stale task refs; this pass uses full remote revisions.
+
+| Candidate | Pinned revision | Result | Disposition |
+| --- | --- | --- | --- |
+| #335 | `767b0cb740316c03b16da1731cdd435215f63e9c` | workspace exit 101, 157.53 s | Rejected |
+| #336 | `5daa3cfde2647fff19120f4e6c92a5d601e7dbfd` | workspace exit 0, 216.24 s; browser exit 1, 94.20 s | Rejected: 2 browser regressions |
+| #436 | `9312cee55f81fd2fafb2566776cec9d62aedfc87` | workspace exit 0, 239.09 s | Merged as `5aba0f1c` |
+| foundation | `d8b3f8315c6643c34338b0f3f13bd1dca772ef18` | workspace exit 0, 139.19 s | Merged as `ba28f774` |
+
+Command for each complete workspace run:
+
+```sh
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 \
+  CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 \
+  CARGO_TARGET_DIR="$PWD/target" cargo test --workspace
+```
+
+### Workspace output excerpts
+
+Representative API-suite lines from each successful complete run:
+
+```text
+336:
+test result: ok. 327 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.09s
+436:
+test result: ok. 327 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.94s
+foundation:
+test result: ok. 327 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.50s
+```
+
+Every command completed all workspace targets and doc tests. Existing
+ignored cases were left unchanged; this pass added no ignores or skips.
+
+### Final disposition
+
+The foundation report passed its full workspace run and was merged as
+`ba28f77485fcc00bdf4e1ad6fef68d919d91866c`. Relative to the previous main,
+the merge changes only `INTEGRATION.md`; every other file equals the
+workspace-tested #436 tree. Each candidate was tested at its pinned
+revision. The combined documentation merge was checked for source-tree
+identity, not described as another workspace test run.
+
+No duplicate task branch existed for an issue in this snapshot. #335
+requires the owner to repair its API test compilation error. #336 requires
+the owner to update the two obsolete browser triggers without removing
+or weakening the audit isolation assertions, then rerun those cases.
+Judge attempts to write both corresponding worker Todo notes were rejected
+by the peer ownership guard. The judge integration Todo holds both results.
+
+This new report is published on the existing judge task branch. Its
+publication does not close worker-owned feature Todos or prove native
+WebView, desktop visuals, Windows/macOS, real API browser flows, or sidecar
+execution. The candidate pass is complete; later task revisions require
+fresh validation before integration.
+
+### #436 integration receipt
+
+The full workspace command exited 0 in 239.09 seconds. Immediately
+before merging, main and #436 were fetched again and the task tip still
+matched the tested revision. The no-fast-forward merge tree equals the
+complete tested tree. Push and remote readback confirmed:
+
+```text
+2047509c..5aba0f1c HEAD -> main
+5aba0f1cf67832aacc6410827e263d323e1fdbe7 refs/heads/main
+```
+
+Local `main` belongs to the canonical worktree. The judge used its own
+detached integration worktree and pushed `HEAD:main`, preserving the
+canonical checkout. No worker code was edited during integration.
+
+### #336 current-tip browser regression
+
+At `5daa3cfd`, the focused browser run exited **1** after **94.20 s**:
+
+```sh
+AGHUB_SKIP_SIDECAR=1 AGHUB_E2E_SKIP_API=1 AGHUB_E2E_PORT=1437 bunx playwright test e2e/list-interactions.spec.ts e2e/skill-audit.spec.ts --workers=1 -g 'updating a library re-imports from its source|updating a private library prefills its stored credential|resetting a Git scan discards its late response|switching branches discards the previous audit and session'
+```
+
+```text
+2 failed
+  resetting a Git scan discards its late response
+  switching branches discards the previous audit and session
+2 passed (1.6m)
+```
+
+The auto-scan and credential-prefill cases passed. Both existing audit
+regressions stop at the old manual Scan action (lines 517 and 649):
+the first button is disabled during the pending automatic scan; the
+second is covered after automatic scan collapses the repository card.
+Their downstream isolation assertions were not reached, so these results
+do not establish whether late responses or stale audit state are safe.
+The owner must adapt the trigger to automatic scanning, retain all
+isolation assertions, and rerun both cases before integration.
+`AGHUB_E2E_SKIP_API=1` omits the real API process for these mocked cases;
+this is not real API, sidecar or native desktop evidence.
+
+First 40 lines of browser failure output:
+
+```text
+  1) [chromium] › e2e/skill-audit.spec.ts:484:1 › resetting a Git scan discards its late response ──
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Scan', exact: true })
+        - locator resolved to <button data-rac="" tabindex="0" type="submit" data-slot="button" data-react-aria-pressable="true" id="react-aria1375150121-_r_6e_" class="button button--md button--primary">Scan</button>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not enabled
+        - retrying click action
+        - waiting 20ms
+        2 × waiting for element to be visible, enabled and stable
+          - element is not enabled
+        - retrying click action
+          - waiting 100ms
+        42 × waiting for element to be visible, enabled and stable
+           - element is not enabled
+         - retrying click action
+           - waiting 500ms
+
+
+      515 | 		request.url().endsWith("/api/v1/skills/git/scan"),
+      516 | 	);
+    > 517 | 	await page.getByRole("button", { name: "Scan", exact: true }).click();
+          | 	                                                              ^
+      518 | 	await scanRequest;
+      519 |
+      520 | 	const repositoryCard = page.getByRole("button", {
+        at <review-worktree>/crates/desktop/e2e/skill-audit.spec.ts:517:64
+
+    Error Context: test-results/skill-audit-resetting-a-Git-scan-discards-its-late-response-chromium/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/skill-audit-resetting-a-Git-scan-discards-its-late-response-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/skill-audit-resetting-a-Git-scan-discards-its-late-response-chromium/trace.zip
+
+```
+
+### #335 failure excerpt
+
+First error onward, at most 40 lines (the complete diagnostic is shorter):
+
+```text
+error[E0277]: `error::ApiError` doesn't implement `std::fmt::Debug`
+    --> crates/api/src/routes/skills.rs:4292:38
+     |
+4292 |             skill_directory_hash(&source_dir).unwrap()
+     |                                               ^^^^^^ unsatisfied trait bound
+     |
+help: the trait `std::fmt::Debug` is not implemented for `error::ApiError`
+    --> crates/api/src/error.rs:15:1
+     |
+  15 | pub struct ApiError {
+     | ^^^^^^^^^^^^^^^^^^^
+     = note: add `#[derive(Debug)]` to `error::ApiError` or manually `impl std::fmt::Debug for error::ApiError`
+note: required by a bound in `Result::<T, E>::unwrap`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/result.rs:1227:4
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `aghub-api` (lib test) due to 1 previous error
+```
+
+The judge made no changes to peer source or tests. A worker-owned Todo
+note was attempted using judge identity and explicit integration authority;
+LoopX rejected the cross-peer update. The judge integration Todo retains
+the failure and owner follow-up. Desktop visuals, native WebView,
+Windows/macOS and real sidecar behavior remain missing proof.
+
 ## 2026-09-15 — current integration pass and settlement diagnosis
 
 This pass pins #335 `767b0cb740316c03b16da1731cdd435215f63e9c`
