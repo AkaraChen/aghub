@@ -1,5 +1,68 @@
 # Integration record
 
+## 2026-09-15 — issue #436 validation in progress
+
+- Main: `72f296f0317a405f96a163246eebdc77d74c668d`.
+- Explicit main/task fetch found two unmerged task branches:
+  `task/436-grok-worker-1` at
+  `d1894b1b5dd36b8e972823dc8e0b38f90cac7e75` and
+  `task/foundation-codex-judge` at
+  `01e59776692499ddba02e1e04187f546996819c8` (short revision `01e59776`).
+- There are no duplicate issue branches in this queue snapshot.
+- **Neither branch is merged.** Issue #436 is undergoing the full
+  workspace command in the judge worktree, fixed at the commit above.
+  The foundation candidate and clean-clone main baseline still require
+  successful full runs afterward.
+
+The prior foundation run has no final result file. Both PIDs recorded
+in its continuation are absent; the surviving log ends with
+`Compiling reqwest v0.13.4`. Its termination cause, final exit status,
+and duration are unknown. Earlier statements that it was running were
+observations at the time, not proof it survived into this pass.
+
+The new issue #436 command started at `2026-09-15T07:31:21Z`:
+
+```sh
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 \
+  CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 cargo test --workspace
+```
+
+The supervisor records the tested commit before starting Cargo and
+captures its final return code and monotonic duration after exit. It is
+running in a detached session, with on-disk start metadata and log files.
+Its process and compilation output were observed after the launching
+shell exited. The exact local continuation paths are in the LoopX Todo;
+they are not public acceptance evidence.
+
+Static inspection found three changed Rust files, no workflow changes,
+and no removed failure assertions. The unsupported native-target test
+now uses Openclaw because Codex gains a project skill write path. This
+inspection does not establish a passing suite or real Codex app-server
+compatibility.
+
+Observed at `2026-09-15T07:41:34Z` after 613 seconds: Cargo
+was running, and the final result file did not yet exist. Last ten log
+lines (compilation only; local workspace path abbreviated):
+
+```text
+   Compiling termcolor v1.4.1
+   Compiling pulley-interpreter v43.0.2
+   Compiling skill v1.9.0-beta.1 (.../crates/skill)
+   Compiling gix-lock v24.0.0
+   Compiling jsonc-parser v0.33.1
+   Compiling which v8.0.6
+   Compiling hex v0.4.3
+   Compiling cranelift-codegen-shared v0.130.2
+   Compiling target-lexicon v0.13.5
+   Compiling cranelift-codegen-meta v0.130.2
+```
+
+No failing-test set has been measured. Do not treat a
+compile snapshot as a failure excerpt or a pass. If Cargo exits red,
+record the first 40 failure lines and keep the branch unmerged. If green,
+verify the remote tip and current main before integration. Desktop,
+Windows/macOS and real sidecar proof remain missing.
+
 ## 2026-09-15 — admitted retry still compiling
 
 - Main: `72f296f0317a405f96a163246eebdc77d74c668d`.

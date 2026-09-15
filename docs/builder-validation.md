@@ -122,8 +122,22 @@ changed for these attempts.
 
 ### Current CLI admission
 
-The selection blocker recorded below no longer reproduces when the real
-CLI runtime profile is supplied. On Turn `2026-09-15T06:42:42Z`, the
+Use the default CLI route and the real runtime profile together. On Turn
+`2026-09-15T07:28:46Z`, selection with explicit `--registry` and
+`--runtime-root` still returned `delivery_allowed=false` and
+`selection_required=true`, despite `--runtime-profile codex_cli`.
+The default route below accepted the same Todo and Turn, returning
+`delivery_allowed=true` and a matching settlement receipt. The default
+route resolves the registered active state in the canonical repository;
+the judge worktree has no separate `.loopx/registry.json` or goal state.
+Do not copy or recreate that state in each worktree.
+
+This establishes a route-dependent discrepancy, not a repaired LoopX
+installation. Preserve the full initial quota packet and follow its
+contract; if selection remains blocked, verify admission before delivery.
+Do not impersonate an App/SSH profile or edit a guard receipt.
+
+On the earlier Turn `2026-09-15T06:42:42Z`, the
 generated selection command without a runtime profile still returned
 `selection_required=true`. Reusing that exact Turn and Todo with
 `--runtime-profile codex_cli` returned `delivery_allowed=true`, a matching
@@ -138,21 +152,44 @@ export LOOPX_TURN="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 loopx --format json quota should-run --goal-id aghub-goal \
   --agent-id codex-judge --runtime-profile codex_cli \
   --turn-instance-id "$LOOPX_TURN"
-# If selection is required, use the generated command with the same
-# runtime profile and Turn identity; inspect its contract before work.
+# If selection is required, bind the existing Todo and Turn:
+loopx --format json quota should-run --goal-id aghub-goal \
+  --todo-id todo_78e9885160c8 --agent-id codex-judge \
+  --runtime-profile codex_cli --turn-instance-id "$LOOPX_TURN"
+# Inspect delivery_allowed and settlement identity before work.
 ```
 
 This is current admission evidence, not a claim that the earlier runtime
 diagnosis was false or that this pass repaired the installed CLI.
 
-### Current compilation attempt
+### Prior compilation attempt
 
 At candidate `1159d581cae68f5feb3301757c308de0ddce5e4a`, the admitted
 single-job command resumed dependency compilation. At
 `2026-09-15T07:04:03Z`, Cargo had been running for 20 minutes 18 seconds
 and had reached `gix-hash v0.26.2`. No final exit status, failing-test
 set or passing workspace result exists at this checkpoint. The process
-was left running; retrieve its result before launching another attempt.
+was left running. On the next pass both recorded supervisor and Cargo
+PIDs were absent, and no final result file existed. Its log stopped at
+`Compiling reqwest v0.13.4`. The termination cause and exit status are
+unknown; this attempt cannot establish either a passing or failing suite.
+
+### Cross-turn result capture
+
+Before starting a replacement, check both the result file and the actual
+recorded processes. A stale log or absent result alone does not prove a
+process is still running. Avoid launching duplicate judge builds.
+
+Capture the source commit **before** starting Cargo. Write a start record
+with the command, UTC timestamp, supervisor PID and Cargo PID, and a
+separate final record with exit status and monotonic elapsed time only
+after Cargo exits. Retain logs on disk. A detached supervisor must survive
+the initiating shell; verify its process and log after the shell exits.
+If the supervisor disappears without a result, mark the run incomplete.
+
+Keep the tested worktree at the recorded commit until the process exits.
+Write integration evidence from a separate worktree when necessary.
+The latest candidate and its observed status are in `INTEGRATION.md`.
 See the latest `INTEGRATION.md` entry for the exact command and complete
 output snapshot. The source-clean baseline clone remains at
 `72f296f0317a405f96a163246eebdc77d74c668d`, ready for its separate run.
