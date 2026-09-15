@@ -147,6 +147,15 @@ turn-scoped advancement completion requires matching writeback and quota spend r
 accountable refresh is blocked until controller-declared completion validation durably completes todo todo_78e9885160c8
 ```
 
+A final structured blocked refresh (`outcome_gap`,
+`progress-result-class=blocked`, blocker `completion-refresh-ordering`)
+was accepted with `appended=true` and a satisfied vision checkpoint.
+The following spend command still returned `ok=false`, `appended=false`:
+
+```text
+quota spend is blocked until controller-declared completion validation durably completes todo todo_78e9885160c8
+```
+
 This remains a runtime settlement blocker. P0 is not declared done,
 and no quota spend receipt is fabricated. Preserve the validation
 requirement while repairing this completion/refresh ordering contract.
