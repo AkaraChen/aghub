@@ -812,7 +812,7 @@ fn test_global_skill_paths() {
 		(AgentType::Claude, Some(&[".claude/skills"])),
 		(
 			AgentType::Codex,
-			Some(&[".codex/skills", "/etc/codex/skills", ".agents/skills"]),
+			Some(&[".agents/skills", ".codex/skills", "/etc/codex/skills"]),
 		),
 		(AgentType::Openclaw, Some(&[".openclaw/skills"])),
 		(
@@ -893,12 +893,13 @@ fn test_global_skill_paths() {
 							agent_type
 						);
 					} else if agent_type == AgentType::Codex {
-						// /etc/codex/skills is a Unix-only system path
+						// Current user path, then legacy ~/.codex/skills.
+						// /etc/codex/skills is a Unix-only admin path.
 						let mut expected_paths =
-							vec![home().join(".codex/skills")];
+							vec![home().join(".agents/skills")];
+						expected_paths.push(home().join(".codex/skills"));
 						#[cfg(not(target_os = "windows"))]
 						expected_paths.push(PathBuf::from("/etc/codex/skills"));
-						expected_paths.push(home().join(".agents/skills"));
 						assert_eq!(
 							actual, expected_paths,
 							"global_skill_read_paths mismatch for {:?}",
@@ -936,7 +937,7 @@ fn test_project_skill_paths() {
 
 	let expected: [(AgentType, Option<&[&str]>); 22] = [
 		(AgentType::Claude, Some(&[".claude/skills"])),
-		(AgentType::Codex, Some(&[".agents/skills"])),
+		(AgentType::Codex, Some(&[".agents/skills", ".codex/skills"])),
 		(AgentType::Openclaw, None), // Openclaw has no project skills
 		(
 			AgentType::OpenCode,
