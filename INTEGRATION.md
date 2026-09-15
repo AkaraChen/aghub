@@ -1,5 +1,85 @@
 # Integration record
 
+## 2026-09-15 — terminal #436 compilation failure
+
+**Not merged.** The carried-over full workspace run on
+`d1894b1b5dd36b8e972823dc8e0b38f90cac7e75` finished at
+`2026-09-15T09:44:20.135340+00:00` with Cargo exit **101**, after
+**7979.0 seconds** (2 h 12 min 59 s). The failing crate is
+`yara-x 1.17.0`; its compiler process received signal 9 (`SIGKILL`).
+No test result was reached, so the failing-test set is **not measured**.
+The compiler diagnostic does not by itself establish an OOM kill.
+
+Actual command, started in the judge worktree at `2026-09-15T07:31:21Z`:
+
+```sh
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 cargo test --workspace
+```
+
+### First 40 failure lines
+
+The log contains only four lines from the first `error:` to EOF; all four
+are reproduced below. The home-directory prefix is replaced with `$HOME`.
+The long compiler invocation is retained so its terminating signal remains
+part of the original diagnostic.
+
+```text
+error: could not compile `yara-x` (lib)
+
+Caused by:
+  process didn't exit successfully: `$HOME/.rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/bin/rustc --crate-name yara_x --edition=2024 $HOME/.cargo/git/checkouts/yara-x-74b3dd3e6ee1849a/e0096cd/lib/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C opt-level=1 -C embed-bitcode=no -C debug-assertions=on --cfg 'feature="constant-folding"' --cfg 'feature="exact-atoms"' --cfg 'feature="fast-regexp"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("console-module", "constant-folding", "crx-module", "crypto", "cuckoo-module", "default", "default-modules", "dex-module", "dotnet-module", "elf-module", "exact-atoms", "fast-regexp", "generate-module-docs", "generate-proto-code", "hash-module", "lnk-module", "logging", "macho-module", "magic-module", "math-module", "native-code-serialization", "parallel-compilation", "pe-module", "protoc", "pulley", "rules-profiling", "string-module", "test_proto2-module", "test_proto3-module", "time-module", "vt-module"))' -C metadata=88fefc4a5371bbbd -C extra-filename=-f8a5bf8808a9bab4 --out-dir $HOME/Developer/aghub-judge/target/debug/deps -C strip=debuginfo -L dependency=$HOME/Developer/aghub-judge/target/debug/deps --extern annotate_snippets=$HOME/Developer/aghub-judge/target/debug/deps/libannotate_snippets-811ecab956cfe225.rmeta --extern anyhow=$HOME/Developer/aghub-judge/target/debug/deps/libanyhow-77969aec8d196c0b.rmeta --extern base64=$HOME/Developer/aghub-judge/target/debug/deps/libbase64-ffba77cd2f5b1674.rmeta --extern bincode=$HOME/Developer/aghub-judge/target/debug/deps/libbincode-969cfc50fe3e7330.rmeta --extern bitflags=$HOME/Developer/aghub-judge/target/debug/deps/libbitflags-e27bf87314d2819b.rmeta --extern bitvec=$HOME/Developer/aghub-judge/target/debug/deps/libbitvec-0a314643e0b3d305.rmeta --extern bstr=$HOME/Developer/aghub-judge/target/debug/deps/libbstr-e1dc184b4505f104.rmeta --extern daachorse=$HOME/Developer/aghub-judge/target/debug/deps/libdaachorse-2dc2ea44dac7d5b1.rmeta --extern hex=$HOME/Developer/aghub-judge/target/debug/deps/libhex-b9abb339c41f142c.rmeta --extern indexmap=$HOME/Developer/aghub-judge/target/debug/deps/libindexmap-78e3813c4cfa4449.rmeta --extern intaglio=$HOME/Developer/aghub-judge/target/debug/deps/libintaglio-ae12bbad19ff33d2.rmeta --extern inventory=$HOME/Developer/aghub-judge/target/debug/deps/libinventory-05bd0565c627b11c.rmeta --extern itertools=$HOME/Developer/aghub-judge/target/debug/deps/libitertools-99c4a582f9dc09b9.rmeta --extern memchr=$HOME/Developer/aghub-judge/target/debug/deps/libmemchr-6181c21c21fda231.rmeta --extern memmap2=$HOME/Developer/aghub-judge/target/debug/deps/libmemmap2-b95d0c9facafb2dd.rmeta --extern num_derive=$HOME/Developer/aghub-judge/target/debug/deps/libnum_derive-33b37663e5fe9cee.so --extern num_traits=$HOME/Developer/aghub-judge/target/debug/deps/libnum_traits-eb145d0c04f92820.rmeta --extern protobuf=$HOME/Developer/aghub-judge/target/debug/deps/libprotobuf-671bc9ffa7d74423.rmeta --extern regex=$HOME/Developer/aghub-judge/target/debug/deps/libregex-18728fc814e9e37d.rmeta --extern regex_automata=$HOME/Developer/aghub-judge/target/debug/deps/libregex_automata-ad6eac5865818452.rmeta --extern regex_syntax=$HOME/Developer/aghub-judge/target/debug/deps/libregex_syntax-3d4f5e63214601e0.rmeta --extern rustc_hash=$HOME/Developer/aghub-judge/target/debug/deps/librustc_hash-8c76cc366150d7e8.rmeta --extern serde=$HOME/Developer/aghub-judge/target/debug/deps/libserde-dc00d36d053e7811.rmeta --extern serde_json=$HOME/Developer/aghub-judge/target/debug/deps/libserde_json-b8117fc31197a4c0.rmeta --extern smallvec=$HOME/Developer/aghub-judge/target/debug/deps/libsmallvec-d8c4ca6c2738a5d4.rmeta --extern strum_macros=$HOME/Developer/aghub-judge/target/debug/deps/libstrum_macros-6d9d2539495a2eb2.so --extern thiserror=$HOME/Developer/aghub-judge/target/debug/deps/libthiserror-4956b21161e0307f.rmeta --extern walrus=$HOME/Developer/aghub-judge/target/debug/deps/libwalrus-e04c1cb4d7d03d5b.rmeta --extern wasmtime=$HOME/Developer/aghub-judge/target/debug/deps/libwasmtime-7033456e0433914b.rmeta --extern yara_x_macros=$HOME/Developer/aghub-judge/target/debug/deps/libyara_x_macros-d49383028bf86382.so --extern yara_x_parser=$HOME/Developer/aghub-judge/target/debug/deps/libyara_x_parser-bc21561033105d59.rmeta --cap-lints allow -L native=$HOME/Developer/aghub-judge/target/debug/build/wasmtime-3044dfac06b76f96/out` (signal: 9, SIGKILL: kill)
+```
+
+### Queue and current revisions
+
+The serial supervisor observed the predecessor exit and started #436
+`2fa9578658d9a50b533393f6ccd6c13ff7918249` at
+`2026-09-15T09:44:21.464637+00:00`. By the 09:46Z observation it had reached
+`Compiling yara-x v1.17.0`; there was no final result. This demonstrates
+predecessor-to-candidate execution on agHub, not a successful validation.
+No concurrent judge Cargo invocation was launched and the running plan
+was not edited.
+
+An explicit task-head fetch found these remote revisions:
+
+| Branch | Remote revision | Integration status |
+| --- | --- | --- |
+| `task/436-grok-worker-1` | `e14d3272` | Current tip untested; pinned queue tests older `2fa95786` |
+| `task/335-grok-worker-2` | `49deb6c6` | Waiting behind #436; hash-error review finding remains open |
+| `task/foundation-codex-judge` | `18c3c7b6` before this evidence update | Waiting behind #335; this documentation update needs final-tip validation |
+
+Main remains `72f296f0317a405f96a163246eebdc77d74c668d`.
+There are no duplicate issue branches. The queue will also validate the
+clean clone of that main commit, sharing only the warmed disk-backed target.
+A result for either old #436 revision cannot authorize merging `e14d3272`.
+Fetch again after the queue ends and validate the then-current task tips.
+
+### Resource observation and continuation
+
+At `2026-09-15T09:44Z`, `free -h` reported 15 GiB RAM, 2.5 GiB available
+and no swap. `df -h /tmp` reported a 10 GiB tmpfs with 5.8 GiB used;
+the judge target is on the disk-backed root filesystem. These observations
+support investigating shared memory pressure, but are not kernel OOM
+attribution. Preserve other workloads and the current compilation cache.
+
+The attempt to add this failure note to the #436 Todo, using the judge
+identity and the explicit integration authority reason, returned:
+
+```text
+agent_id='codex-judge' cannot update todo_id='todo_9e9c2483edde'; it is claimed_by='grok-worker-1'
+```
+
+The peer claim was preserved. This report and the judge-owned foundation
+Todo retain the failure handoff; the peer Todo was **not** updated.
+
+The foundation checkpoint remains **open**. Retrieve each queue result,
+record its revision, exit code, duration and failure excerpt, then decide
+integration against freshly fetched tips. Do not infer a pass from a
+running process or the queue's eventual `finished` status. If the resource
+failure repeats, record the distinct failure and replan validation capacity
+before another identical queue. Full workspace, clean-clone, desktop,
+sidecar, Windows and macOS acceptance remain missing proof.
+
 ## 2026-09-15 — pinned queue after candidate revision changed
 
 Main is still `72f296f0317a405f96a163246eebdc77d74c668d`.
