@@ -120,13 +120,53 @@ changed for these attempts.
 
 ## Integration retry — 2026-09-15
 
+### Current CLI admission
+
+The selection blocker recorded below no longer reproduces when the real
+CLI runtime profile is supplied. On Turn `2026-09-15T06:42:42Z`, the
+generated selection command without a runtime profile still returned
+`selection_required=true`. Reusing that exact Turn and Todo with
+`--runtime-profile codex_cli` returned `delivery_allowed=true`, a matching
+settlement identity, and a valid `codex_cli` execution context. No runtime
+code or guard receipt was edited, and no App/SSH profile was used.
+
+Start future CLI turns with the actual profile, and reuse the Turn for
+selection and settlement:
+
+```sh
+export LOOPX_TURN="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+loopx --format json quota should-run --goal-id aghub-goal \
+  --agent-id codex-judge --runtime-profile codex_cli \
+  --turn-instance-id "$LOOPX_TURN"
+# If selection is required, use the generated command with the same
+# runtime profile and Turn identity; inspect its contract before work.
+```
+
+This is current admission evidence, not a claim that the earlier runtime
+diagnosis was false or that this pass repaired the installed CLI.
+
+### Current compilation attempt
+
+At candidate `1159d581cae68f5feb3301757c308de0ddce5e4a`, the admitted
+single-job command resumed dependency compilation. At
+`2026-09-15T07:04:03Z`, Cargo had been running for 20 minutes 18 seconds
+and had reached `gix-hash v0.26.2`. No final exit status, failing-test
+set or passing workspace result exists at this checkpoint. The process
+was left running; retrieve its result before launching another attempt.
+See the latest `INTEGRATION.md` entry for the exact command and complete
+output snapshot. The source-clean baseline clone remains at
+`72f296f0317a405f96a163246eebdc77d74c668d`, ready for its separate run.
+
+### Earlier attempts
+
 The subsequent pass at foundation commit
 `0b8cd70ff3c25bf4a301ffc5fcc5393d3033d598` did not start Cargo: LoopX
 1.0.3 generated a `codex_cli` selection command but ignored its requested
 Todo, leaving delivery prohibited. See the latest `INTEGRATION.md` entry
 for the actual command, output and isolated argument-handling reproduction.
-Repair and verify the CLI selection contract before resuming the command
-below. The prior compilation attempts remain incomplete evidence.
+That pass required repair and verification before resuming the command
+below; current admission is recorded above. The prior compilation attempts
+remain incomplete evidence.
 
 The judge retried the full workspace on the foundation branch at
 `3a6c70998472db3752b70a0401fac744dfcffd4c`, using a disk-backed worktree.

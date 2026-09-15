@@ -1,5 +1,87 @@
 # Integration record
 
+## 2026-09-15 — admitted retry still compiling
+
+- Main: `72f296f0317a405f96a163246eebdc77d74c668d`.
+- Tested candidate: `task/foundation-codex-judge` at
+  `1159d581cae68f5feb3301757c308de0ddce5e4a`.
+- Explicit fetch of main and task heads found only this task branch;
+  there were no duplicate issue branches to supersede.
+- Disposition at `2026-09-15T07:04:03Z`: **not merged — missing proof**.
+  Cargo was still running after 20 minutes 18 seconds. No test binary
+  had reported results and no compiler error had been emitted.
+- The process was left running to preserve compilation progress. There
+  is no final exit status or total duration yet. This is not a failure
+  verdict or a pass. Read the existing process result before starting
+  another build or changing the candidate's Rust source.
+
+Command actually running:
+
+```sh
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0   CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 cargo test --workspace
+```
+
+Complete output at the observation (27 lines; no failure excerpt exists):
+
+```text
+   Compiling tauri-utils v2.9.3
+   Compiling gio-sys v0.18.1
+   Compiling faster-hex v0.10.0
+   Compiling aws-lc-sys v0.39.1
+   Compiling sha1 v0.10.6
+   Compiling http-body v1.0.1
+   Compiling aws-lc-rs v1.16.2
+   Compiling ring v0.17.14
+   Compiling gix-quote v0.8.0
+   Compiling encoding_rs v0.8.35
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling foreign-types-shared v0.1.1
+   Compiling rustls v0.23.37
+   Compiling openssl v0.10.76
+   Compiling openssl-probe v0.2.1
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling foreign-types v0.3.2
+   Compiling rustls-webpki v0.103.9
+   Compiling sha1-checked v0.10.0
+   Compiling openssl-sys v0.9.112
+   Compiling h2 v0.4.13
+   Compiling memmap2 v0.9.11
+   Compiling openssl-macros v0.1.1
+   Compiling pin-utils v0.1.0
+   Compiling native-tls v0.2.18
+   Compiling hyper v1.8.1
+   Compiling gix-hash v0.26.2
+   Compiling gdk-sys v0.18.2
+   Compiling hashbrown v0.16.1
+   Compiling bumpalo v3.20.2
+   Compiling shell-words v1.1.1
+   Compiling jiff v0.2.28
+```
+
+At that observation, `/proc/pressure/memory` reported
+`some avg60=55.34` and `full avg60=36.63`. This measures builder memory
+pressure, not a proven cause of any particular compiler delay. The
+existing single-job profile and compiler cache directories were retained.
+Only documentation was edited during the run; Rust sources, manifests,
+configuration and tests still match the tested candidate.
+
+### Admission and continuation
+
+The previous selection blocker did not reproduce after the same Turn's
+selection command supplied the real `--runtime-profile codex_cli`.
+The result was `delivery_allowed=true`, matching settlement identity,
+and `execution_context.valid=true`; no LoopX installation or stored
+receipt was edited. The initial profile-less command had returned
+`selection_required=true` with a missing execution context.
+
+Todo `todo_78e9885160c8` remains open. First retrieve the running test's
+result using the local continuation recorded in its note. If it passes,
+validate the final documentation tip before integrating. Then run the
+full command in the preserved clean baseline clone and record its exact
+commit, final duration and result. If it fails, quote the first 40 failure
+lines and leave the branch unmerged. Workspace, clean-clone, desktop,
+sidecar, Windows and macOS acceptance remain unproven.
+
 ## 2026-09-15 — CLI selection blocks the next validation pass
 
 - Main: `72f296f0317a405f96a163246eebdc77d74c668d`.
