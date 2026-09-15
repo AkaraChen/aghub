@@ -1,5 +1,103 @@
 # Integration record
 
+## 2026-09-15 — clean foundation merged; P0 settlement blocked
+
+This pass tested the initial pinned candidate set with the complete
+workspace command. No test was removed, filtered or newly ignored.
+
+| Candidate | Tested commit | Exit | Seconds | Disposition |
+| --- | --- | --- | --- | --- |
+| #335 | `767b0cb7` | 101 | 253.31 | Rejected: API test compilation |
+| #336 | `5daa3cfd` | 0 | 282.11 | Held: prior same-tip browser failures |
+| foundation, clean clone | `b73fc9ea` | 0 | 523.68 | Merged as `23cff34e` |
+
+Command for every run (explicit PATH as in the builder contract):
+
+```sh
+RUSTC_WRAPPER= CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 \
+  CARGO_PROFILE_TEST_DEBUG=0 AGHUB_SKIP_SIDECAR=1 \
+  CARGO_TARGET_DIR="$HOME/Developer/aghub-judge/target" \
+  cargo test --workspace
+```
+
+The first two runs used the judge worktree. Foundation used a new
+disk-backed `git clone --no-hardlinks --no-checkout`, detached at
+`b73fc9ea0cd5ef32c89ef3aa05f79912c6613631`. It reused the warmed target
+and dependency caches. The runner verified the pinned revision and empty
+Git status before and after every run.
+
+Actual successful output:
+
+```text
+336:
+    Finished `test` profile [unoptimized] target(s) in 4m 19s
+test result: ok. 327 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.63s
+foundation clean clone:
+    Finished `test` profile [unoptimized] target(s) in 8m 17s
+test result: ok. 327 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.29s
+```
+
+Both successful commands completed all workspace targets and doc tests.
+Their failing-test sets are empty; the shown ignored case predates this
+pass. Native WebView, Windows/macOS, visuals and sidecar execution remain
+**missing proof**.
+
+The foundation merge tree exactly equals the tested tree. Local `main`
+belongs to the canonical worktree, so integration used detached
+`origin/main` in the judge worktree. Actual push and remote readback:
+
+```text
+ba28f774..23cff34e HEAD -> main
+23cff34e46d9312970a18f6959b1d8763c6f4ba0 refs/heads/main
+```
+
+### #335 first failure lines
+
+The complete diagnostic has fewer than 40 lines:
+
+```text
+error[E0277]: `error::ApiError` doesn't implement `std::fmt::Debug`
+    --> crates/api/src/routes/skills.rs:4292:38
+     |
+4292 |             skill_directory_hash(&source_dir).unwrap()
+     |                                               ^^^^^^ unsatisfied trait bound
+     |
+help: the trait `std::fmt::Debug` is not implemented for `error::ApiError`
+    --> crates/api/src/error.rs:15:1
+     |
+  15 | pub struct ApiError {
+     | ^^^^^^^^^^^^^^^^^^^
+     = note: add `#[derive(Debug)]` to `error::ApiError` or manually `impl std::fmt::Debug for error::ApiError`
+note: required by a bound in `Result::<T, E>::unwrap`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/result.rs:1227:4
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `aghub-api` (lib test) due to 1 previous error
+```
+
+### #336 changed after pinned validation
+
+The final explicit task-ref fetch found `39aa1285`, replacing tested
+`5daa3cfd`. The new diff changes scan handling and browser tests.
+It was **not tested or merged in this pass**. The earlier 2-pass/2-fail
+Chromium result below belongs to `5daa3cfd`, not the new tip. Validate
+`39aa1285` with the full workspace command and focused browser regression
+cases before deciding integration; check that isolation assertions remain
+intact. There were no duplicate issue branches in the snapshot.
+
+### LoopX writeback limits
+
+Judge attempted the requested notes for both worker-owned Todos with
+`--agent-id codex-judge`; both were rejected by the peer ownership guard.
+Their results are retained here and in the judge-owned P0 note.
+No peer identity was used to bypass the guard.
+
+P0 completion and accountable-refresh preview both returned `ok=false`,
+reproducing the completion/settlement cycle. The configured shell command
+also conflicts with the shell-free validation runner and its timeout.
+See the [diagnosis and repair plan](docs/builder-validation.md#loopx-completion-blocker--2026-09-15).
+The validation requirement is preserved; P0 is not declared done.
+
 ## 2026-09-15 — current #436 integrated; #335 and #336 rejected
 
 Explicitly fetching `refs/heads/main` and `refs/heads/task/*` found four
