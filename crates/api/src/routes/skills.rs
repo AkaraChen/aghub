@@ -3988,12 +3988,15 @@ mod tests {
 			Some(&project_root),
 		);
 
-		assert_eq!(invalid.len(), 1);
-		assert_eq!(invalid[0].0, "codex");
+		assert!(invalid.is_empty());
 		assert_eq!(groups.len(), 3);
 		assert!(groups.contains_key(&project_root.join(".claude/skills")));
 		assert!(groups.contains_key(&project_root.join(".opencode/skills")));
-		assert!(groups.contains_key(&project_root.join(".agents/skills")));
+		let shared = groups
+			.get(&project_root.join(".agents/skills"))
+			.expect("universal and Codex share .agents/skills");
+		assert!(shared.iter().any(|(name, _)| name == "universal"));
+		assert!(shared.iter().any(|(name, _)| name == "codex"));
 	}
 
 	#[test]
