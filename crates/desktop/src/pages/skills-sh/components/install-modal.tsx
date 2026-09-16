@@ -90,6 +90,7 @@ export function InstallModal({
 									{t("selectAgentsForSkill")}
 								</p>
 								<SkillTargetSelector
+									label={t("targetAgent")}
 									agents={skillAgents}
 									selectedKeys={selectedAgents}
 									onSelectionChange={onSelectedAgentsChange}

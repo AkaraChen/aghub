@@ -1,62 +1,37 @@
-import { Button, SearchField } from "@heroui/react";
-import { useState } from "react";
+import { useQueryState } from "nuqs";
 import { useTranslation } from "react-i18next";
-import { useLocation } from "wouter";
+import { Empty, EmptyHeader, EmptyTitle } from "../../components/ui/empty";
 import { SkillsHeader } from "./components/skills-header";
+import SkillsSearchPage from "./search";
 
 export default function SkillsShPage() {
 	const { t } = useTranslation();
-	const [, setLocation] = useLocation();
-	const [searchQuery, setSearchQuery] = useState("");
-
-	const handleSearch = () => {
-		if (searchQuery.trim().length >= 2) {
-			setLocation(
-				`/market/search?q=${encodeURIComponent(searchQuery.trim())}`,
-			);
-		}
-	};
-
-	const handleKeyDown = (e: React.KeyboardEvent) => {
-		if (e.key === "Enter") {
-			handleSearch();
-		}
-	};
-
+	const [query, setQuery] = useQueryState("q", {
+		defaultValue: "",
+		history: "push",
+	});
+	const submittedQuery = query.trim();
 	return (
-		<div className="h-full flex flex-col p-6 overflow-hidden">
-			<div className="flex flex-col items-center pt-[20vh]">
-				<SkillsHeader
-					size="large"
-					searchQuery={searchQuery}
-					onSearchQueryChange={setSearchQuery}
-					onSearch={handleSearch}
-					showSearchButton={false}
-				/>
-				<div className="flex items-center gap-2 mt-5">
-					<SearchField
-						value={searchQuery}
-						onChange={setSearchQuery}
-						onKeyDown={handleKeyDown}
-						aria-label={t("searchMarketSkills")}
-						className="w-[400px]"
-					>
-						<SearchField.Group>
-							<SearchField.SearchIcon />
-							<SearchField.Input
-								placeholder={t("searchMarketSkillsPlaceholder")}
-							/>
-							<SearchField.ClearButton />
-						</SearchField.Group>
-					</SearchField>
-					<Button
-						onPress={handleSearch}
-						isDisabled={searchQuery.trim().length < 2}
-					>
-						{t("search")}
-					</Button>
-				</div>
-			</div>
+		<div className="flex h-full min-h-0 flex-col gap-2.5 overflow-hidden p-4 sm:p-6">
+			<SkillsHeader
+				key={`header:${submittedQuery}`}
+				initialQuery={submittedQuery}
+				onSearch={(value) => void setQuery(value)}
+			/>
+			{submittedQuery.length >= 2 ? (
+				<SkillsSearchPage key={submittedQuery} query={submittedQuery} />
+			) : (
+				<Empty className="border-0">
+					<EmptyHeader>
+						<EmptyTitle className="text-sm font-normal text-muted">
+							{t("searchToFindSkills")}
+						</EmptyTitle>
+					</EmptyHeader>
+				</Empty>
+			)}
+			<p className="shrink-0 border-t border-separator/70 pt-2 text-xs text-muted">
+				{t("dataFromSkillsSh")}
+			</p>
 		</div>
 	);
 }

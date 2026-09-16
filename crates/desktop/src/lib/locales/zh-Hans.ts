@@ -1410,6 +1410,8 @@ export default {
 	marketplaceNoneTitle: "尚未配置市场来源",
 	marketplaceRefreshSource: "刷新 {{name}}",
 	marketplaceRemoveSource: "移除 {{name}}",
+	skillsMarketLoadMore: "加载更多",
+	skillsMarketCount: "已加载 {{count}} 条结果",
 	pluginMarket: "插件市场",
 	pluginMarketDescription: "从当前配置的市场源发现并安装插件",
 	pluginInfo: "位置",

@@ -41,7 +41,6 @@ const MCPServersPage = lazy(() => import("./pages/settings/mcp-servers"));
 const RulesPage = lazy(() => import("./pages/settings/rules"));
 const SkillsPage = lazy(() => import("./pages/settings/skills"));
 const SubAgentsPage = lazy(() => import("./pages/settings/sub-agents"));
-const SkillsSearchPage = lazy(() => import("./pages/skills-sh/search"));
 const UsagePage = lazy(() => import("./pages/usage"));
 
 const queryClient = new QueryClient({
@@ -257,15 +256,17 @@ function App() {
 									</Route>
 
 									<Route path="/market/search">
-										<MainLayout>
-											<ErrorBoundary>
-												<Suspense
-													fallback={<PageSkeleton />}
-												>
-													<SkillsSearchPage />
-												</Suspense>
-											</ErrorBoundary>
-										</MainLayout>
+										{() => {
+											const params = new URLSearchParams(
+												window.location.search,
+											);
+											params.set("tab", "skills-sh");
+											return (
+												<Redirect
+													to={`/market?${params}`}
+												/>
+											);
+										}}
 									</Route>
 
 									<Route path="/library">

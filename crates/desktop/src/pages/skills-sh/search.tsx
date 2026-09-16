@@ -1,54 +1,34 @@
-import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
-import { Button, Spinner } from "@heroui/react";
+import { Button, Spinner, Table } from "@heroui/react";
+import { tableVariants } from "@heroui/styles";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useQueryState } from "nuqs";
-import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TableComponents } from "react-virtuoso";
 import { TableVirtuoso } from "react-virtuoso";
-import { useLocation } from "wouter";
-import {
-	Empty,
-	EmptyHeader,
-	EmptyMedia,
-	EmptyTitle,
-} from "../../components/ui/empty";
+import { Empty, EmptyHeader, EmptyTitle } from "../../components/ui/empty";
 import type { MarketSkill } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import { marketSearchInfiniteQueryOptions } from "../../requests/market";
 import { InstallModal } from "./components/install-modal";
-import { SkillsHeader } from "./components/skills-header";
 import { useSkillInstall } from "./hooks/use-skill-install";
 
-const BATCH_SIZE = 20;
-const FETCH_SIZE = 100;
-const ROW_HEIGHT = 48;
-
+// Virtuoso owns the native table elements; reuse HeroUI's table styles.
+const tableStyles = tableVariants({ variant: "secondary" });
 const tableComponents: TableComponents<MarketSkill> = {
-	Table: ({ style, ...props }) => (
+	Table: (props) => (
 		<table
-			className="w-full table-fixed caption-bottom text-sm"
-			style={style}
 			{...props}
+			aria-label="skills.sh"
+			className={tableStyles.content({ className: "w-full table-fixed" })}
 		/>
 	),
-	TableHead: (props) => (
-		<thead className="border-b border-border" {...props} />
-	),
-	TableBody: (props) => <tbody {...props} />,
-	TableRow: ({ style, ...props }) => (
-		<tr
-			className="border-b border-border"
-			style={{ height: ROW_HEIGHT, ...style }}
-			{...props}
-		/>
-	),
+	TableHead: (props) => <thead {...props} className={tableStyles.header()} />,
+	TableBody: (props) => <tbody {...props} className={tableStyles.body()} />,
+	TableRow: (props) => <tr {...props} className={tableStyles.row()} />,
 };
 
-export default function SkillsSearchPage() {
+export default function SkillsSearchPage({ query }: { query: string }) {
 	const { t, i18n } = useTranslation();
 	const api = useApi();
-	const [, setLocation] = useLocation();
 
 	const {
 		installModalOpen,
@@ -74,168 +54,165 @@ export default function SkillsSearchPage() {
 		handleCloseInstallModal,
 	} = useSkillInstall();
 
-	const compactFormatter = useMemo(
-		() =>
-			new Intl.NumberFormat(i18n.language, {
-				notation: "compact",
-				compactDisplay: "short",
-			}),
-		[i18n.language],
-	);
-
-	const [urlQuery, setUrlQuery] = useQueryState("q");
-	const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
-
-	const submittedQuery = urlQuery ?? "";
-
-	const { data, isFetching, isFetchingNextPage, hasNextPage, fetchNextPage } =
-		useInfiniteQuery({
-			...marketSearchInfiniteQueryOptions({
-				api,
-				query: submittedQuery,
-				enabled: submittedQuery.length >= 2,
-			}),
-		});
-
-	const searchResults = useMemo(() => data?.pages.flat() ?? [], [data]);
-
-	const displayedResults = useMemo(
-		() => searchResults.slice(0, visibleCount),
-		[searchResults, visibleCount],
-	);
-
-	const hasMore = visibleCount < searchResults.length;
-
-	const handleEndReached = useCallback(() => {
-		if (hasMore && !isFetching) {
-			setVisibleCount((c) =>
-				Math.min(c + BATCH_SIZE, searchResults.length),
-			);
-			const remaining = searchResults.length - visibleCount;
-			if (remaining < FETCH_SIZE && hasNextPage && !isFetchingNextPage) {
-				fetchNextPage();
-			}
-		}
-	}, [
-		hasMore,
+	const compactFormatter = new Intl.NumberFormat(i18n.language, {
+		notation: "compact",
+		compactDisplay: "short",
+	});
+	const {
+		data,
+		isPending,
+		isError,
+		error,
 		isFetching,
-		searchResults.length,
-		visibleCount,
+		isFetchNextPageError,
 		hasNextPage,
-		isFetchingNextPage,
 		fetchNextPage,
-	]);
-
-	if (submittedQuery.length < 2) {
-		setLocation("/market");
-		return null;
-	}
-
+		refetch,
+	} = useInfiniteQuery(marketSearchInfiniteQueryOptions({ api, query }));
+	const results = data?.pages.flat() ?? [];
+	const handleLoadMore = () => {
+		if (hasNextPage && !isFetching) void fetchNextPage();
+	};
 	return (
-		<div className="h-full flex flex-col p-6 overflow-hidden">
-			<div className="shrink-0 pb-4">
-				<div className="flex items-center gap-6">
-					<SearchHeader
-						key={submittedQuery}
-						size="compact"
-						initialQuery={submittedQuery}
-						onSearch={(query) => {
-							setUrlQuery(query);
-							setVisibleCount(BATCH_SIZE);
-						}}
-						showSearchButton={true}
-					/>
-				</div>
-			</div>
-
-			{isFetching && searchResults.length === 0 ? (
-				<div className="flex items-center justify-center py-12">
-					<Spinner size="lg" />
-				</div>
-			) : searchResults.length === 0 ? (
+		<>
+			{isPending ? (
 				<div className="flex flex-1 items-center justify-center">
-					<Empty className="border-0">
-						<EmptyHeader>
-							<EmptyMedia>
-								<MagnifyingGlassIcon className="size-8 text-muted" />
-							</EmptyMedia>
-							<EmptyTitle className="text-sm font-normal text-muted">
-								{t("noResults")}
-							</EmptyTitle>
-						</EmptyHeader>
-					</Empty>
+					<Spinner />
 				</div>
+			) : results.length === 0 ? (
+				<Empty className="border-0">
+					<EmptyHeader>
+						<EmptyTitle className="text-sm font-normal text-muted [overflow-wrap:anywhere]">
+							{isError ? error.message : t("noResults")}
+						</EmptyTitle>
+					</EmptyHeader>
+					{isError && (
+						<Button variant="secondary" onPress={() => refetch()}>
+							{t("retry")}
+						</Button>
+					)}
+				</Empty>
 			) : (
-				<div className="flex-1 min-h-0 overflow-hidden">
-					<TableVirtuoso
-						data={displayedResults}
-						endReached={handleEndReached}
-						fixedItemHeight={ROW_HEIGHT}
-						style={{ height: "100%" }}
-						components={tableComponents}
-						itemContent={(_index, skill) => (
-							<>
-								<td className="p-2 align-middle">
-									<span className="font-medium">
+				<>
+					<Table variant="secondary" className="min-h-0 flex-1">
+						<TableVirtuoso
+							data={results}
+							components={tableComponents}
+							style={{ height: "100%" }}
+							defaultItemHeight={56}
+							computeItemKey={(_index, skill) =>
+								`${skill.source}/${skill.slug}`
+							}
+							endReached={() => {
+								if (!isError) handleLoadMore();
+							}}
+							fixedHeaderContent={() => (
+								<tr>
+									<th
+										scope="col"
+										className={tableStyles.column({
+											className: "w-[36%]",
+										})}
+									>
+										{t("name")}
+									</th>
+									<th
+										scope="col"
+										className={tableStyles.column({
+											className: "w-24 text-right",
+										})}
+									>
+										{t("installs")}
+									</th>
+									<th
+										scope="col"
+										className={tableStyles.column()}
+									>
+										{t("source")}
+									</th>
+									<th
+										scope="col"
+										className={tableStyles.column({
+											className: "w-24 text-right",
+										})}
+									>
+										{t("actions")}
+									</th>
+								</tr>
+							)}
+							itemContent={(_index, skill) => (
+								<>
+									<td
+										className={tableStyles.cell({
+											className:
+												"font-medium [overflow-wrap:anywhere]",
+										})}
+									>
 										{skill.name}
-									</span>
-								</td>
-								<td className="p-2 align-middle">
-									<span className="text-muted">
+									</td>
+									<td
+										className={tableStyles.cell({
+											className:
+												"text-right text-muted tabular-nums",
+										})}
+									>
 										{compactFormatter.format(
 											skill.installs,
 										)}
-									</span>
-								</td>
-								<td className="p-2 align-middle">
-									<span className="text-muted text-sm">
-										{skill.source}
-									</span>
-								</td>
-								<td className="p-2 align-middle">
-									<Button
-										size="sm"
-										variant="tertiary"
-										onPress={() =>
-											handleInstallClick(skill)
-										}
-									>
-										{t("install")}
-									</Button>
-								</td>
-							</>
-						)}
-					>
-						<thead>
-							<tr>
-								<th className="h-12 px-2 text-left align-middle font-medium w-[35%]">
-									{t("name")}
-								</th>
-								<th className="h-12 px-2 text-left align-middle font-medium w-[15%]">
-									{t("installs")}
-								</th>
-								<th className="h-12 px-2 text-left align-middle font-medium w-[35%]">
-									{t("source")}
-								</th>
-								<th className="h-12 px-4 align-middle w-[15%]" />
-							</tr>
-						</thead>
-						<tfoot>
-							{isFetchingNextPage && (
-								<tr>
-									<td
-										colSpan={4}
-										className="py-3 text-center"
-									>
-										<Spinner size="sm" />
 									</td>
-								</tr>
+									<td
+										className={tableStyles.cell({
+											className:
+												"text-muted [overflow-wrap:anywhere]",
+										})}
+									>
+										{skill.source}
+									</td>
+									<td
+										className={tableStyles.cell({
+											className: "text-right",
+										})}
+									>
+										<Button
+											size="sm"
+											variant="secondary"
+											onPress={() =>
+												handleInstallClick(skill)
+											}
+										>
+											{t("install")}
+										</Button>
+									</td>
+								</>
 							)}
-						</tfoot>
-					</TableVirtuoso>
-				</div>
+						/>
+					</Table>
+					<div className="flex shrink-0 flex-wrap items-center justify-between gap-2 text-xs text-muted">
+						<span>
+							{t("skillsMarketCount", { count: results.length })}
+						</span>
+						{isError && (
+							<span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+								{error.message}
+							</span>
+						)}
+						{(hasNextPage || isError) && (
+							<Button
+								variant="ghost"
+								size="sm"
+								isPending={isFetching}
+								onPress={() => {
+									if (isError && !isFetchNextPageError)
+										void refetch();
+									else handleLoadMore();
+								}}
+							>
+								{t(isError ? "retry" : "skillsMarketLoadMore")}
+							</Button>
+						)}
+					</div>
+				</>
 			)}
-
 			<InstallModal
 				isOpen={installModalOpen}
 				selectedSkill={selectedSkill}
@@ -258,35 +235,6 @@ export default function SkillsSearchPage() {
 				onInstall={handleInstall}
 				onConfirmInstall={handleConfirmInstall}
 			/>
-		</div>
-	);
-}
-
-function SearchHeader({
-	size,
-	initialQuery,
-	onSearch,
-	showSearchButton,
-}: {
-	size: "large" | "compact";
-	initialQuery: string;
-	onSearch: (query: string) => void;
-	showSearchButton: boolean;
-}) {
-	const [searchQuery, setSearchQuery] = useState(initialQuery);
-
-	return (
-		<SkillsHeader
-			size={size}
-			searchQuery={searchQuery}
-			onSearchQueryChange={setSearchQuery}
-			onSearch={() => {
-				const query = searchQuery.trim();
-				if (query.length >= 2) {
-					onSearch(query);
-				}
-			}}
-			showSearchButton={showSearchButton}
-		/>
+		</>
 	);
 }

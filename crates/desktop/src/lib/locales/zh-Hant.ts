@@ -1404,6 +1404,8 @@ export default {
 	marketplaceNoneTitle: "尚未設定市集來源",
 	marketplaceRefreshSource: "重新整理 {{name}}",
 	marketplaceRemoveSource: "移除 {{name}}",
+	skillsMarketLoadMore: "載入更多",
+	skillsMarketCount: "已載入 {{count}} 筆結果",
 	pluginMarket: "外掛市場",
 	pluginMarketDescription: "從目前設定的市場來源探索並安裝外掛",
 	pluginInfo: "位置",

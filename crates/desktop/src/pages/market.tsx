@@ -56,6 +56,7 @@ export default function MarketPage() {
 	const { t } = useTranslation();
 	const [tabParam, setTabParam] = useQueryState("tab", {
 		defaultValue: "skills-sh",
+		history: "push",
 	});
 	const activeTab: MarketTabId = isMarketTabId(tabParam)
 		? tabParam
@@ -82,15 +83,14 @@ export default function MarketPage() {
 				</div>
 			</header>
 
-			<Surface
-				variant="secondary"
-				className="border-b border-border px-4 py-2"
+			<Tabs
+				className="min-h-0 flex-1 gap-0"
+				selectedKey={activeTab}
+				onSelectionChange={(key) => setTabParam(String(key))}
 			>
-				<Tabs
-					selectedKey={activeTab}
-					onSelectionChange={(key) =>
-						setTabParam(String(key) as MarketTabId)
-					}
+				<Surface
+					variant="secondary"
+					className="shrink-0 border-b border-border px-4 py-2"
 				>
 					<Tabs.ListContainer>
 						<Tabs.List
@@ -139,25 +139,35 @@ export default function MarketPage() {
 							</Tabs.Tab>
 						</Tabs.List>
 					</Tabs.ListContainer>
-				</Tabs>
-			</Surface>
+				</Surface>
 
-			<div className="min-h-0 flex-1 overflow-y-auto">
-				{activeTab === "skills-sh" && <SkillsShPage />}
-				{activeTab === "mcp" && (
-					<div className="p-4 sm:p-6">
-						<McpMarketTab />
-					</div>
-				)}
-				{activeTab === "claude-plugins" && (
+				<Tabs.Panel
+					id="skills-sh"
+					className="min-h-0 flex-1 overflow-hidden p-0"
+				>
+					<SkillsShPage />
+				</Tabs.Panel>
+				<Tabs.Panel
+					id="mcp"
+					className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
+				>
+					<McpMarketTab />
+				</Tabs.Panel>
+				<Tabs.Panel
+					id="claude-plugins"
+					className="min-h-0 flex-1 overflow-hidden p-0"
+				>
 					<Suspense fallback={<TabFallback />}>
 						<ClaudePluginsTab installScope={pluginInstallScope} />
 					</Suspense>
-				)}
-				{activeTab === "github" && (
+				</Tabs.Panel>
+				<Tabs.Panel
+					id="github"
+					className="min-h-0 flex-1 overflow-y-auto p-0"
+				>
 					<LazyImportGithubSkillPanel onDone={() => {}} />
-				)}
-			</div>
+				</Tabs.Panel>
+			</Tabs>
 		</div>
 	);
 }

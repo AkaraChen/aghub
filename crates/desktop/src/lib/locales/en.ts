@@ -1403,6 +1403,8 @@ export default {
 	marketplaceNoneTitle: "No marketplace sources configured",
 	marketplaceRefreshSource: "Refresh {{name}}",
 	marketplaceRemoveSource: "Remove {{name}}",
+	skillsMarketLoadMore: "Load more",
+	skillsMarketCount: "{{count}} loaded",
 	pluginMarket: "Plugin Market",
 	pluginMarketDescription:
 		"Discover and install plugins from your configured marketplace sources",
