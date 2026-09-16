@@ -80,6 +80,10 @@ test.describe("GitHub import targets", () => {
 		await page
 			.getByRole("menuitem", { name: "Import Remote Source" })
 			.click();
+		await expect(page).toHaveURL(/\/market\?tab=github$/);
+		await expect(
+			page.getByRole("tab", { name: "Import Skills from GitHub" }),
+		).toHaveAttribute("aria-selected", "true");
 		await scanRepository(page);
 		await expectSharedTargets(page);
 	});

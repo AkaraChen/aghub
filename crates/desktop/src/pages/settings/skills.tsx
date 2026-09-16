@@ -19,6 +19,7 @@ import {
 	useState,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "wouter";
 import { matrixGroup } from "../../components/agent-coverage-matrix";
 import { BulkActionsPanel } from "../../components/bulk-actions-panel";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
@@ -70,6 +71,7 @@ import {
 const GITHUB_PREFIX_REGEX = /^github\//;
 
 export default function SkillsPage() {
+	const [, setLocation] = useLocation();
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
@@ -132,7 +134,7 @@ export default function SkillsPage() {
 		skillPreferences.warnOnConflicts;
 
 	const [panelMode, setPanelMode] = useState<
-		"create" | "import" | "update-source" | "import-github" | null
+		"create" | "import" | "update-source" | null
 	>(null);
 
 	// The library page: set when a source cluster row is clicked; any
@@ -372,8 +374,7 @@ export default function SkillsPage() {
 	};
 
 	const handleImportGithub = () => {
-		handleSelectionChange(new Set());
-		setPanelMode("import-github");
+		setLocation("/market?tab=github");
 	};
 
 	const actionIntents = {
@@ -718,10 +719,6 @@ export default function SkillsPage() {
 								/>
 							) : panelMode === "import" ? (
 								<ImportSkillPanel
-									onDone={() => setPanelMode(null)}
-								/>
-							) : panelMode === "import-github" ? (
-								<LazyImportGithubSkillPanel
 									onDone={() => setPanelMode(null)}
 								/>
 							) : panelMode === "update-source" ? (
