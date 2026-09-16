@@ -1,7 +1,6 @@
 "use client";
 
-import { ArrowPathIcon } from "@heroicons/react/24/solid";
-import { Button, ListBox, SearchField, Select, toast } from "@heroui/react";
+import { toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	useCallback,
@@ -13,13 +12,13 @@ import {
 import { useTranslation } from "react-i18next";
 import { useApi } from "../hooks/use-api";
 import { usePluginInstallState } from "../hooks/use-plugin-install-state";
-import { cn } from "../lib/utils";
 import {
 	installPluginMutationOptions,
 	pluginMarketQueryOptions,
 	updateMarketplaceMutationOptions,
 } from "../requests/plugins";
 import { PluginMarketTable } from "./plugin-market/market-table";
+import { PluginMarketToolbar } from "./plugin-market/market-toolbar";
 
 interface PluginMarketContentProps {
 	installScope?: "global" | "project" | "local";
@@ -228,7 +227,6 @@ export function PluginMarketContent({
 		updateMarketplaceMutation.mutate();
 	};
 
-	const selectedCategoryKey = selectedCategory ?? "__all__";
 	const isRefreshingMarketplace = updateMarketplaceMutation.isPending;
 
 	const containerClass =
@@ -238,74 +236,18 @@ export function PluginMarketContent({
 
 	return (
 		<div className={containerClass}>
-			<div className="shrink-0">
-				<div className="flex items-center gap-2">
-					<SearchField
-						variant="secondary"
-						value={searchQuery}
-						onChange={setSearchQuery}
-						aria-label={t("searchPlugins")}
-						className="min-w-0 flex-1"
-					>
-						<SearchField.Group>
-							<SearchField.SearchIcon />
-							<SearchField.Input
-								placeholder={t("searchPlugins")}
-							/>
-							<SearchField.ClearButton />
-						</SearchField.Group>
-					</SearchField>
-					<Select
-						variant="secondary"
-						aria-label={t("pluginMarketCategory")}
-						selectedKey={selectedCategoryKey}
-						onSelectionChange={(key) =>
-							setSelectedCategory(
-								key === "__all__" ? null : (key as string),
-							)
-						}
-						className="min-w-32 max-w-40 shrink-0"
-					>
-						<Select.Trigger>
-							<Select.Value />
-							<Select.Indicator />
-						</Select.Trigger>
-						<Select.Popover>
-							<ListBox>
-								<ListBox.Item id="__all__" textValue={t("all")}>
-									{t("all")}
-								</ListBox.Item>
-								{categories.map((category) => (
-									<ListBox.Item
-										key={category}
-										id={category}
-										textValue={getCategoryLabel(category)}
-									>
-										{getCategoryLabel(category)}
-									</ListBox.Item>
-								))}
-							</ListBox>
-						</Select.Popover>
-					</Select>
-					<Button
-						variant="secondary"
-						size="sm"
-						className="shrink-0"
-						onPress={handleUpdateMarketplace}
-						isDisabled={isRefreshingMarketplace}
-					>
-						<span className="flex items-center gap-1.5">
-							<ArrowPathIcon
-								className={cn(
-									"size-4",
-									isRefreshingMarketplace && "animate-spin",
-								)}
-							/>
-							{t("updateMarketplace")}
-						</span>
-					</Button>
-				</div>
-			</div>
+			<PluginMarketToolbar
+				searchQuery={searchQuery}
+				onSearchChange={setSearchQuery}
+				selectedCategory={selectedCategory}
+				onCategoryChange={setSelectedCategory}
+				categories={categories}
+				getCategoryLabel={getCategoryLabel}
+				isRefreshing={isRefreshingMarketplace}
+				onRefresh={handleUpdateMarketplace}
+				installScope={installScope}
+				showNavigation={variant === "page"}
+			/>
 
 			<PluginMarketTable
 				plugins={filteredPlugins}

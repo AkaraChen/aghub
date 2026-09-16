@@ -1396,6 +1396,20 @@ export default {
 	designer: "设计师",
 
 	// Plugin Market
+	manageMarketplaceSources: "管理来源",
+	marketplaceSources: "市场来源",
+	marketplaceSourcesDescription:
+		"管理 Claude Code 插件来源，与 Skill 和 MCP 目录独立。",
+	viewInstalledPlugins: "已安装插件",
+	marketplaceSourcePlaceholder: "owner/repository、Git URL 或本地路径",
+	marketplaceAddSource: "添加来源",
+	marketplaceAdded: "已添加市场来源",
+	marketplaceAddFailed: "添加市场来源失败",
+	marketplaceRemoved: "已移除市场来源",
+	marketplaceRemoveFailed: "移除市场来源失败",
+	marketplaceNoneTitle: "尚未配置市场来源",
+	marketplaceRefreshSource: "刷新 {{name}}",
+	marketplaceRemoveSource: "移除 {{name}}",
 	pluginMarket: "插件市场",
 	pluginMarketDescription: "从当前配置的市场源发现并安装插件",
 	pluginInfo: "位置",

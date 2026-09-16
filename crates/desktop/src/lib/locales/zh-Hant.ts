@@ -1390,6 +1390,20 @@ export default {
 	designer: "設計師",
 
 	// Plugin Market
+	manageMarketplaceSources: "管理來源",
+	marketplaceSources: "市集來源",
+	marketplaceSourcesDescription:
+		"管理 Claude Code 外掛來源，與 Skill 和 MCP 目錄獨立。",
+	viewInstalledPlugins: "已安裝外掛",
+	marketplaceSourcePlaceholder: "owner/repository、Git URL 或本機路徑",
+	marketplaceAddSource: "新增來源",
+	marketplaceAdded: "已新增市集來源",
+	marketplaceAddFailed: "新增市集來源失敗",
+	marketplaceRemoved: "已移除市集來源",
+	marketplaceRemoveFailed: "移除市集來源失敗",
+	marketplaceNoneTitle: "尚未設定市集來源",
+	marketplaceRefreshSource: "重新整理 {{name}}",
+	marketplaceRemoveSource: "移除 {{name}}",
 	pluginMarket: "外掛市場",
 	pluginMarketDescription: "從目前設定的市場來源探索並安裝外掛",
 	pluginInfo: "位置",

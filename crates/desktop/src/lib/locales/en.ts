@@ -1389,6 +1389,20 @@ export default {
 	},
 
 	// Plugin Market
+	manageMarketplaceSources: "Manage sources",
+	marketplaceSources: "Marketplace sources",
+	marketplaceSourcesDescription:
+		"Manage Claude Code plugin sources. Skills and MCP catalogs are separate.",
+	viewInstalledPlugins: "Installed plugins",
+	marketplaceSourcePlaceholder: "owner/repository, Git URL or local path",
+	marketplaceAddSource: "Add source",
+	marketplaceAdded: "Marketplace source added",
+	marketplaceAddFailed: "Failed to add marketplace source",
+	marketplaceRemoved: "Marketplace source removed",
+	marketplaceRemoveFailed: "Failed to remove marketplace source",
+	marketplaceNoneTitle: "No marketplace sources configured",
+	marketplaceRefreshSource: "Refresh {{name}}",
+	marketplaceRemoveSource: "Remove {{name}}",
 	pluginMarket: "Plugin Market",
 	pluginMarketDescription:
 		"Discover and install plugins from your configured marketplace sources",
