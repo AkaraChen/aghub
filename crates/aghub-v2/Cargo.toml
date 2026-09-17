@@ -7,3 +7,5 @@ edition = "2024"
 anyhow = "1.0.104"
 gpui-kit = "0.6.1"
 phosphor-gpui = { git = "https://github.com/AkaraChen/phosphor-gpui", rev = "630dd19a6ff6a5cd3d83c4e401444d800401ac65" }
+rust-i18n = "4.2"
+sys-locale = "0.3"

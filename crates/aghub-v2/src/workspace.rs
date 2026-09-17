@@ -5,6 +5,7 @@ use gpui_kit::component::sidebar::{
 use gpui_kit::component::*;
 use gpui_kit::*;
 use phosphor_gpui::IconName as Phosphor;
+use rust_i18n::t;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
@@ -19,12 +20,12 @@ impl Page {
 		[Self::Home, Self::Plugins, Self::Manage]
 	}
 
-	fn title(self) -> &'static str {
+	fn title(self) -> String {
 		match self {
-			Self::Home => "主页",
-			Self::Plugins => "插件",
-			Self::Manage => "管理",
-			Self::Settings => "设置",
+			Self::Home => t!("nav.home").into(),
+			Self::Plugins => t!("nav.plugins").into(),
+			Self::Manage => t!("nav.manage").into(),
+			Self::Settings => t!("nav.settings").into(),
 		}
 	}
 
@@ -59,7 +60,7 @@ impl Workspace {
 			scope,
 			_appearance: appearance,
 		};
-		window.set_window_title(this.page.title());
+		window.set_window_title(&this.page.title());
 		this
 	}
 
@@ -103,7 +104,7 @@ impl Workspace {
 			return;
 		}
 		self.page = page;
-		window.set_window_title(page.title());
+		window.set_window_title(&page.title());
 		cx.notify();
 	}
 

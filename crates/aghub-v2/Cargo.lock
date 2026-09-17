@@ -116,6 +116,8 @@ dependencies = [
  "anyhow",
  "gpui-kit",
  "phosphor-gpui",
+ "rust-i18n",
+ "sys-locale",
 ]
 
 [[package]]
