@@ -232,6 +232,11 @@ pub fn write_global_install_locks(
 					installed_at,
 					updated_at: now.clone(),
 					plugin_name: None,
+					extra: lock
+						.skills
+						.get(&update.name)
+						.map(|entry| entry.extra.clone())
+						.unwrap_or_default(),
 				},
 			);
 		}
@@ -286,6 +291,11 @@ pub fn write_project_install_locks(
 					ref_name: source.ref_name.clone(),
 					source_type: source.source_type.clone(),
 					computed_hash: update.skill_folder_hash.clone(),
+					extra: lock
+						.skills
+						.get(&update.name)
+						.map(|entry| entry.extra.clone())
+						.unwrap_or_default(),
 				},
 			);
 		}
@@ -409,6 +419,7 @@ mod tests {
 				installed_at: installed_at.clone(),
 				updated_at: installed_at.clone(),
 				plugin_name: None,
+				extra: Default::default(),
 			},
 		);
 		global::write_skill_lock(&initial).unwrap();
@@ -429,6 +440,58 @@ mod tests {
 			lock.skills["beta"].installed_at,
 			lock.skills["beta"].updated_at
 		);
+	}
+
+	#[test]
+	fn recording_install_preserves_shared_lock_extensions() {
+		let _guard = TestLockGuard::new();
+		write_global_install_locks(&source(), &[update("demo", "first")])
+			.unwrap();
+		let mut lock = global::read_skill_lock();
+		let entry = lock.skills.get_mut("demo").unwrap();
+		entry.extra.insert("pinnedRef".into(), "v1.0".into());
+		entry
+			.extra
+			.insert("providerData".into(), serde_json::json!({"x": 1}));
+		global::write_skill_lock(&lock).unwrap();
+
+		write_global_install_locks(&source(), &[update("demo", "second")])
+			.unwrap();
+
+		assert_eq!(
+			global::read_skill_lock().skills["demo"].extra,
+			lock.skills["demo"].extra
+		);
+	}
+
+	#[test]
+	fn recording_project_install_preserves_shared_lock_extensions() {
+		let root = TempDir::new().unwrap();
+		write_project_install_locks(
+			&source(),
+			&[update("demo", "first")],
+			root.path(),
+		)
+		.unwrap();
+		let mut lock = local::read_local_lock(Some(root.path()));
+		lock.extra.insert("providerSetting".into(), true.into());
+		lock.skills
+			.get_mut("demo")
+			.unwrap()
+			.extra
+			.insert("providerData".into(), 42.into());
+		local::write_local_lock(&lock, Some(root.path())).unwrap();
+
+		write_project_install_locks(
+			&source(),
+			&[update("demo", "second")],
+			root.path(),
+		)
+		.unwrap();
+
+		let persisted = local::read_local_lock(Some(root.path()));
+		assert_eq!(persisted.extra, lock.extra);
+		assert_eq!(persisted.skills["demo"].extra, lock.skills["demo"].extra);
 	}
 
 	#[test]

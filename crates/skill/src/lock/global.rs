@@ -13,6 +13,11 @@ pub fn add_skill_to_lock(
 ) -> std::io::Result<()> {
 	mutate_skill_lock(|lock| {
 		let mut entry = entry;
+		if let Some(existing) = lock.skills.get(skill_name) {
+			let mut extra = existing.extra.clone();
+			extra.extend(entry.extra);
+			entry.extra = extra;
+		}
 		let now = Utc::now().to_rfc3339();
 		entry.installed_at = lock
 			.skills
@@ -127,7 +132,32 @@ mod tests {
 			installed_at: "2024-01-01T00:00:00Z".to_string(),
 			updated_at: "2024-01-01T00:00:00Z".to_string(),
 			plugin_name: None,
+			extra: Default::default(),
 		}
+	}
+
+	#[test]
+	fn mutation_preserves_other_installers_metadata() {
+		let _guard = TestLockGuard::new();
+		let path = get_skill_lock_path();
+		std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+		let mut value = serde_json::to_value(SkillLockFile::new()).unwrap();
+		value["providerSetting"] = serde_json::json!({"enabled": true});
+		value["skills"]["external"] =
+			serde_json::to_value(test_entry()).unwrap();
+		value["skills"]["external"]["pinnedRef"] = "v1.2.3".into();
+		value["skills"]["external"]["providerData"] = serde_json::json!([1, 2]);
+		std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+
+		add_skill_to_lock("another", test_entry()).unwrap();
+
+		let persisted: serde_json::Value =
+			serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+		assert_eq!(persisted["providerSetting"], value["providerSetting"]);
+		assert_eq!(
+			persisted["skills"]["external"],
+			value["skills"]["external"]
+		);
 	}
 
 	#[test]

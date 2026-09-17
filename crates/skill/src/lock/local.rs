@@ -27,6 +27,8 @@ pub struct LocalSkillLockEntry {
 	/// computes the hash from actual file contents on disk.
 	#[serde(rename = "computedHash")]
 	pub computed_hash: String,
+	#[serde(flatten)]
+	pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 /// The structure of the local (project-scoped) skill lock file.
@@ -40,6 +42,8 @@ pub struct LocalSkillLockFile {
 	pub version: u32,
 	/// Map of skill name to its lock entry (sorted alphabetically)
 	pub skills: BTreeMap<String, LocalSkillLockEntry>,
+	#[serde(flatten)]
+	pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 impl Default for LocalSkillLockFile {
@@ -47,6 +51,7 @@ impl Default for LocalSkillLockFile {
 		Self {
 			version: CURRENT_VERSION,
 			skills: BTreeMap::new(),
+			extra: BTreeMap::new(),
 		}
 	}
 }
@@ -104,6 +109,12 @@ pub fn add_skill_to_local_lock(
 	cwd: Option<&Path>,
 ) -> std::io::Result<()> {
 	mutate_local_lock(cwd, |lock| {
+		let mut entry = entry;
+		if let Some(existing) = lock.skills.get(skill_name) {
+			let mut extra = existing.extra.clone();
+			extra.extend(entry.extra);
+			entry.extra = extra;
+		}
 		lock.skills.insert(skill_name.to_string(), entry);
 	})
 }
@@ -239,6 +250,7 @@ mod tests {
 				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "zzz".to_string(),
+				extra: Default::default(),
 			},
 		);
 		lock.skills.insert(
@@ -248,6 +260,7 @@ mod tests {
 				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "aaa".to_string(),
+				extra: Default::default(),
 			},
 		);
 		lock.skills.insert(
@@ -257,6 +270,7 @@ mod tests {
 				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "mmm".to_string(),
+				extra: Default::default(),
 			},
 		);
 
@@ -282,6 +296,7 @@ mod tests {
 				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "hash123".to_string(),
+				extra: Default::default(),
 			},
 			Some(dir.path()),
 		)
@@ -309,6 +324,7 @@ mod tests {
 				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "hash123".to_string(),
+				extra: Default::default(),
 			},
 			Some(dir.path()),
 		)
@@ -329,6 +345,7 @@ mod tests {
 				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "old-hash".to_string(),
+				extra: Default::default(),
 			},
 			Some(dir.path()),
 		)
@@ -341,6 +358,7 @@ mod tests {
 				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "new-hash".to_string(),
+				extra: Default::default(),
 			},
 			Some(dir.path()),
 		)
@@ -363,6 +381,7 @@ mod tests {
 				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "aaa".to_string(),
+				extra: Default::default(),
 			},
 			Some(dir.path()),
 		)
@@ -375,6 +394,7 @@ mod tests {
 				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "bbb".to_string(),
+				extra: Default::default(),
 			},
 			Some(dir.path()),
 		)
@@ -396,6 +416,7 @@ mod tests {
 				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "hash".to_string(),
+				extra: Default::default(),
 			},
 			Some(dir.path()),
 		)
@@ -430,6 +451,7 @@ mod tests {
 				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "aaa".to_string(),
+				extra: Default::default(),
 			},
 			Some(dir.path()),
 		)
@@ -448,6 +470,7 @@ mod tests {
 				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "bbb".to_string(),
+				extra: Default::default(),
 			},
 			Some(dir.path()),
 		)

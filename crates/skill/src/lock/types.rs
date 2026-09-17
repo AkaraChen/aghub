@@ -35,6 +35,8 @@ pub struct SkillLockEntry {
 	/// Name of the plugin this skill belongs to (if any)
 	#[serde(rename = "pluginName", skip_serializing_if = "Option::is_none")]
 	pub plugin_name: Option<String>,
+	#[serde(flatten)]
+	pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 /// Tracks dismissed prompts so they're not shown again.
@@ -46,6 +48,8 @@ pub struct DismissedPrompts {
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub find_skills_prompt: Option<bool>,
+	#[serde(flatten)]
+	pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 /// The structure of the skill lock file.
@@ -64,6 +68,8 @@ pub struct SkillLockFile {
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub last_selected_agents: Option<Vec<String>>,
+	#[serde(flatten)]
+	pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 impl Default for SkillLockFile {
@@ -73,6 +79,7 @@ impl Default for SkillLockFile {
 			skills: BTreeMap::new(),
 			dismissed: None,
 			last_selected_agents: None,
+			extra: BTreeMap::new(),
 		}
 	}
 }
@@ -111,6 +118,7 @@ impl SkillLockEntry {
 			installed_at: now.clone(),
 			updated_at: now,
 			plugin_name,
+			extra: BTreeMap::new(),
 		}
 	}
 }

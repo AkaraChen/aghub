@@ -19,6 +19,7 @@ fn test_local_lock_json_matches_typescript_simple() {
 			ref_name: None,
 			source_type: "node_modules".to_string(),
 			computed_hash: "abc123".to_string(),
+			extra: Default::default(),
 		},
 	);
 	write_local_lock(&lock, Some(temp_dir.path())).unwrap();
@@ -55,6 +56,7 @@ fn test_local_lock_json_matches_typescript_sorted() {
 			ref_name: None,
 			source_type: "github".to_string(),
 			computed_hash: "z".to_string(),
+			extra: Default::default(),
 		},
 	);
 	lock.skills.insert(
@@ -64,6 +66,7 @@ fn test_local_lock_json_matches_typescript_sorted() {
 			ref_name: None,
 			source_type: "github".to_string(),
 			computed_hash: "a".to_string(),
+			extra: Default::default(),
 		},
 	);
 	write_local_lock(&lock, Some(temp_dir.path())).unwrap();
