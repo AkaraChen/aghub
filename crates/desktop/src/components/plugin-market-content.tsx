@@ -17,6 +17,7 @@ import {
 	pluginMarketQueryOptions,
 	updateMarketplaceMutationOptions,
 } from "../requests/plugins";
+import { MarketResultSummary } from "./market-result-summary";
 import { PluginMarketTable } from "./plugin-market/market-table";
 import { PluginMarketToolbar } from "./plugin-market/market-toolbar";
 
@@ -262,29 +263,24 @@ export function PluginMarketContent({
 				variant={variant}
 			/>
 
-			<div className="shrink-0 border-t border-separator/70 pt-2">
-				<div className="flex items-center justify-between gap-3">
-					<div className="flex items-center gap-2 text-xs text-muted">
-						<span>
-							{filteredPlugins.length === marketPlugins.length
-								? t("availablePluginsCount", {
-										count: marketPlugins.length,
-									})
-								: t("showingPluginsCount", {
-										filtered: filteredPlugins.length,
-										total: marketPlugins.length,
-									})}
-						</span>
-						<span aria-hidden="true">·</span>
-						<span>
-							{t("installedPluginsCount", {
-								count: installedPluginsCount,
+			<MarketResultSummary actions={footerSlot}>
+				<span>
+					{filteredPlugins.length === marketPlugins.length
+						? t("availablePluginsCount", {
+								count: marketPlugins.length,
+							})
+						: t("showingPluginsCount", {
+								filtered: filteredPlugins.length,
+								total: marketPlugins.length,
 							})}
-						</span>
-					</div>
-					{footerSlot}
-				</div>
-			</div>
+				</span>
+				<span aria-hidden="true">·</span>
+				<span>
+					{t("installedPluginsCount", {
+						count: installedPluginsCount,
+					})}
+				</span>
+			</MarketResultSummary>
 		</div>
 	);
 }

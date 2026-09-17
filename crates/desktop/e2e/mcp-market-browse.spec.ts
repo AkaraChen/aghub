@@ -98,16 +98,25 @@ test("loads subsequent pages, keeps results on failure, and resets the search cu
 		});
 	});
 	await page.goto("/market?tab=mcp");
+	const summary = page.getByRole("status", { name: "Search results" });
+	await expect(summary).toHaveText("1 result loaded");
 	await page.getByRole("button", { name: "Load more", exact: true }).click();
 	await expect(
 		page.getByRole("button", { name: "Retry loading more" }),
 	).toBeVisible({ timeout: 15000 });
 	await expect(page.getByText(server.name, { exact: true })).toBeVisible();
+	await page
+		.getByRole("alertdialog", {
+			name: "Couldn't load the MCP marketplace.",
+		})
+		.getByRole("button", { name: "Close", exact: true })
+		.click();
 	failNextPage = false;
 	await page.getByRole("button", { name: "Retry loading more" }).click();
 	await expect(
 		page.getByText("io.github.acme/next", { exact: true }),
 	).toBeVisible();
+	await expect(summary).toHaveText("2 results");
 	await expect(
 		page.getByRole("button", { name: "Load more", exact: true }),
 	).toBeHidden();
@@ -150,8 +159,45 @@ test("keeps pagination available after a transport filter hides the loaded page"
 			"No matches in loaded results. More results are available.",
 		),
 	).toBeVisible();
+	const summary = page.getByRole("status", { name: "Search results" });
+	await expect(summary).toHaveText("1 loaded · 0 matching");
 	await page.getByRole("button", { name: "Load more", exact: true }).click();
 	await expect(page.getByText(server.name, { exact: true })).toBeVisible();
+	await expect(summary).toHaveText("1 / 2 results");
+});
+
+test("keeps the result summary below the scrollable catalog", async ({
+	page,
+}) => {
+	await installMocks(page);
+	await page.setViewportSize({ width: 960, height: 600 });
+	await page.route(e2eApiUrl("/mcp-market/search**"), (route) =>
+		route.fulfill({
+			json: {
+				servers: Array.from({ length: 12 }, (_, index) => ({
+					...server,
+					name: `io.github.acme/server-${index}`,
+				})),
+				next_cursor: null,
+			},
+		}),
+	);
+	await page.goto("/market?tab=mcp");
+	const panel = page.getByRole("tabpanel", { name: "MCP Marketplace" });
+	const summary = panel.getByRole("status", { name: "Search results" });
+	await expect(summary).toHaveText("12 results");
+	await expect(summary).toBeInViewport();
+	const before = await summary.boundingBox();
+	await panel
+		.getByText("io.github.acme/server-11", { exact: true })
+		.scrollIntoViewIfNeeded();
+	await expect(summary).toBeInViewport();
+	expect((await summary.boundingBox())?.y).toBe(before?.y);
+	expect(
+		await panel.evaluate(
+			(element) => element.scrollHeight <= element.clientHeight,
+		),
+	).toBe(true);
 });
 
 test("starts a separate cursor chain when switching registry source", async ({

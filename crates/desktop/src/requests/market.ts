@@ -3,7 +3,7 @@ import type { MarketSkill } from "../generated/dto";
 import type { ApiClient } from "./client";
 import { queryKeys } from "./keys";
 
-const FETCH_SIZE = 100;
+export const MARKET_SEARCH_PAGE_SIZE = 100;
 const MAX_TOTAL = 1000;
 
 interface MarketSearchQueryParams {
@@ -23,7 +23,7 @@ export function marketSearchInfiniteQueryOptions({
 		queryKey: queryKeys.market.search(query),
 		queryFn: async ({ pageParam }: { pageParam: number }) => {
 			const offset = pageParam;
-			const limit = Math.min(FETCH_SIZE, MAX_TOTAL - offset);
+			const limit = Math.min(MARKET_SEARCH_PAGE_SIZE, MAX_TOTAL - offset);
 			const actualLimit = offset + limit;
 			const results = await api.market.search(query, actualLimit);
 			return results.slice(offset, actualLimit);
@@ -37,7 +37,10 @@ export function marketSearchInfiniteQueryOptions({
 				(sum, page) => sum + page.length,
 				0,
 			);
-			if (lastPage.length < FETCH_SIZE || totalFetched >= MAX_TOTAL) {
+			if (
+				lastPage.length < MARKET_SEARCH_PAGE_SIZE ||
+				totalFetched >= MAX_TOTAL
+			) {
 				return undefined;
 			}
 			return totalFetched;

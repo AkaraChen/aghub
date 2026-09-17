@@ -1241,9 +1241,12 @@ export default {
 	// skills.sh
 	searchMarketSkills: "在 skills.sh 搜索技能...",
 	searchMarketSkillsPlaceholder: "输入技能名称或关键词...",
-	searchToFindSkills: "搜索以从 skills.sh 查找技能",
 	poweredByVercel: "由 Vercel 提供支持",
-	dataFromSkillsSh: "数据来自 skills.sh",
+	marketResultsCount: "共 {{count}} 条结果",
+	marketResultsLoaded: "已加载 {{count}} 条结果",
+	marketResultsFiltered: "显示 {{filtered}} / {{count}} 条结果",
+	marketResultsLoadedFiltered:
+		"已加载 {{count}} 条 · 符合筛选 {{filtered}} 条",
 
 	// Projects
 	addProject: "添加项目",
@@ -1410,8 +1413,6 @@ export default {
 	marketplaceNoneTitle: "尚未配置市场来源",
 	marketplaceRefreshSource: "刷新 {{name}}",
 	marketplaceRemoveSource: "移除 {{name}}",
-	skillsMarketLoadMore: "加载更多",
-	skillsMarketCount: "已加载 {{count}} 条结果",
 	pluginMarket: "插件市场",
 	pluginMarketDescription: "从当前配置的市场源发现并安装插件",
 	pluginInfo: "位置",
@@ -1523,7 +1524,6 @@ export default {
 	marketMcpUpdated: "更新于",
 	marketMcpPublished: "发布于",
 	marketMcpNoSupportedMethod: "此条目未提供支持的安装方式",
-	marketMcpSourceOrder: "按来源顺序 · 已显示 {{count}} 项",
 	marketMcpLoadMore: "加载更多",
 	marketMcpRetryPage: "重试加载更多",
 	marketMcpNoMatchesLoaded: "已加载的结果中暂无匹配，仍有更多结果可加载。",

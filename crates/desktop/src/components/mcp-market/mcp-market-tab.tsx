@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { useApi } from "../../hooks/use-api";
 import { mcpMarketSearchQueryOptions } from "../../requests/mcp-market";
 import { ManageAgentsDialog } from "../manage-agents-dialog";
+import { MarketResultSummary } from "../market-result-summary";
 import {
 	Empty,
 	EmptyDescription,
@@ -65,7 +66,7 @@ export function McpMarketTab() {
 		(isFetching && !data) || install.isInventoryPending;
 
 	return (
-		<div className="flex flex-col gap-4">
+		<div className="flex h-full min-h-0 flex-col gap-2.5 overflow-hidden p-4 sm:p-6">
 			<McpMarketToolbar
 				typeFilter={typeFilter}
 				isFetching={isFetching}
@@ -92,121 +93,138 @@ export function McpMarketTab() {
 				}}
 			/>
 
-			{isError && !data ? (
-				<div className="flex flex-1 items-center justify-center py-12">
-					<Empty className="border-0">
-						<EmptyHeader>
-							<EmptyTitle className="text-base">
-								{t("marketMcpLoadErrorTitle")}
-							</EmptyTitle>
-							<EmptyDescription>
-								{t("marketMcpLoadErrorDescription")}
-							</EmptyDescription>
-						</EmptyHeader>
-						<Button
-							variant="secondary"
-							size="sm"
-							className="mt-2"
-							onPress={() => void refetch()}
-						>
-							{t("retry")}
-						</Button>
-					</Empty>
-				</div>
-			) : install.isInventoryError ? (
-				<div className="flex flex-1 items-center justify-center py-12">
-					<Empty className="border-0">
-						<EmptyHeader>
-							<EmptyTitle className="text-base">
-								{t("marketMcpInventoryErrorTitle")}
-							</EmptyTitle>
-							<EmptyDescription>
-								{t("marketMcpInventoryErrorDescription")}
-							</EmptyDescription>
-						</EmptyHeader>
-						<Button
-							variant="secondary"
-							size="sm"
-							className="mt-2"
-							onPress={() => void install.refetchInventory()}
-						>
-							{t("retry")}
-						</Button>
-					</Empty>
-				</div>
-			) : showInitialSpinner ? (
-				<div className="flex items-center justify-center py-12">
-					<Spinner size="lg" />
-				</div>
-			) : filteredServers.length === 0 ? (
-				<div className="flex flex-1 items-center justify-center py-12">
-					<Empty className="border-0">
-						<EmptyHeader>
-							<EmptyMedia>
-								<MagnifyingGlassIcon className="size-8 text-muted" />
-							</EmptyMedia>
-							<EmptyTitle className="text-sm font-normal text-muted">
-								{t(
-									hasNextPage
-										? "marketMcpNoMatchesLoaded"
-										: "noResults",
-								)}
-							</EmptyTitle>
-						</EmptyHeader>
-					</Empty>
-				</div>
-			) : (
-				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-					{visibleServers.map(({ server, installed }) => (
-						<McpMarketCard
-							key={`${server.name}:${server.version}`}
-							server={server}
-							installed={installed}
-							onAction={() =>
-								installed
-									? install.handleManageClick(server)
-									: install.handleInstallClick(server)
-							}
-						/>
-					))}
-				</div>
-			)}
+			<div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+				{isError && !data ? (
+					<div className="flex flex-1 items-center justify-center py-12">
+						<Empty className="border-0">
+							<EmptyHeader>
+								<EmptyTitle className="text-base">
+									{t("marketMcpLoadErrorTitle")}
+								</EmptyTitle>
+								<EmptyDescription>
+									{t("marketMcpLoadErrorDescription")}
+								</EmptyDescription>
+							</EmptyHeader>
+							<Button
+								variant="secondary"
+								size="sm"
+								className="mt-2"
+								onPress={() => void refetch()}
+							>
+								{t("retry")}
+							</Button>
+						</Empty>
+					</div>
+				) : install.isInventoryError ? (
+					<div className="flex flex-1 items-center justify-center py-12">
+						<Empty className="border-0">
+							<EmptyHeader>
+								<EmptyTitle className="text-base">
+									{t("marketMcpInventoryErrorTitle")}
+								</EmptyTitle>
+								<EmptyDescription>
+									{t("marketMcpInventoryErrorDescription")}
+								</EmptyDescription>
+							</EmptyHeader>
+							<Button
+								variant="secondary"
+								size="sm"
+								className="mt-2"
+								onPress={() => void install.refetchInventory()}
+							>
+								{t("retry")}
+							</Button>
+						</Empty>
+					</div>
+				) : showInitialSpinner ? (
+					<div className="flex items-center justify-center py-12">
+						<Spinner size="lg" />
+					</div>
+				) : filteredServers.length === 0 ? (
+					<div className="flex flex-1 items-center justify-center py-12">
+						<Empty className="border-0">
+							<EmptyHeader>
+								<EmptyMedia>
+									<MagnifyingGlassIcon className="size-8 text-muted" />
+								</EmptyMedia>
+								<EmptyTitle className="text-sm font-normal text-muted">
+									{t(
+										hasNextPage
+											? "marketMcpNoMatchesLoaded"
+											: "noResults",
+									)}
+								</EmptyTitle>
+							</EmptyHeader>
+						</Empty>
+					</div>
+				) : (
+					<div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+						{visibleServers.map(({ server, installed }) => (
+							<McpMarketCard
+								key={`${server.name}:${server.version}`}
+								server={server}
+								installed={installed}
+								onAction={() =>
+									installed
+										? install.handleManageClick(server)
+										: install.handleInstallClick(server)
+								}
+							/>
+						))}
+					</div>
+				)}
+			</div>
 
 			{data &&
 				!install.isInventoryPending &&
 				!install.isInventoryError && (
-					<div className="flex flex-wrap items-center justify-between gap-3">
-						<p className="text-xs text-muted" role="status">
-							{t("marketMcpSourceOrder", {
-								count: visibleServers.length,
-							})}
-						</p>
-						{hasNextPage && (
-							<Button
-								variant="secondary"
-								size="sm"
-								isPending={isFetchingNextPage}
-								isDisabled={isFetching && !isFetchingNextPage}
-								onPress={() => {
-									void fetchNextPage().then((result) => {
-										if (result.isFetchNextPageError)
-											toast.danger(
-												t("marketMcpLoadError"),
-											);
-									});
-								}}
-							>
-								{isFetchingNextPage && (
-									<Spinner size="sm" color="current" />
-								)}
-								{t(
-									isFetchNextPageError
-										? "marketMcpRetryPage"
-										: "marketMcpLoadMore",
-								)}
-							</Button>
-						)}
-					</div>
+					<MarketResultSummary
+						actions={
+							hasNextPage && (
+								<Button
+									variant="secondary"
+									size="sm"
+									isPending={isFetchingNextPage}
+									isDisabled={
+										isFetching && !isFetchingNextPage
+									}
+									onPress={() => {
+										void fetchNextPage().then((result) => {
+											if (result.isFetchNextPageError)
+												toast.danger(
+													t("marketMcpLoadError"),
+												);
+										});
+									}}
+								>
+									{isFetchingNextPage && (
+										<Spinner size="sm" color="current" />
+									)}
+									{t(
+										isFetchNextPageError
+											? "marketMcpRetryPage"
+											: "marketMcpLoadMore",
+									)}
+								</Button>
+							)
+						}
+					>
+						<span>
+							{t(
+								filteredServers.length === servers.length
+									? hasNextPage
+										? "marketResultsLoaded"
+										: "marketResultsCount"
+									: hasNextPage
+										? "marketResultsLoadedFiltered"
+										: "marketResultsFiltered",
+								{
+									count: servers.length,
+									filtered: filteredServers.length,
+								},
+							)}
+						</span>
+					</MarketResultSummary>
 				)}
 
 			<McpInstallModal

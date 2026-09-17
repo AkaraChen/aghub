@@ -1239,9 +1239,12 @@ export default {
 	// skills.sh
 	searchMarketSkills: "在 skills.sh 搜尋技能...",
 	searchMarketSkillsPlaceholder: "輸入技能名稱或關鍵字...",
-	searchToFindSkills: "搜尋以從 skills.sh 尋找技能",
 	poweredByVercel: "由 Vercel 提供支援",
-	dataFromSkillsSh: "資料來自 skills.sh",
+	marketResultsCount: "共 {{count}} 筆結果",
+	marketResultsLoaded: "已載入 {{count}} 筆結果",
+	marketResultsFiltered: "顯示 {{filtered}} / {{count}} 筆結果",
+	marketResultsLoadedFiltered:
+		"已載入 {{count}} 筆 · 符合篩選 {{filtered}} 筆",
 
 	// Projects
 	addProject: "新增專案",
@@ -1404,8 +1407,6 @@ export default {
 	marketplaceNoneTitle: "尚未設定市集來源",
 	marketplaceRefreshSource: "重新整理 {{name}}",
 	marketplaceRemoveSource: "移除 {{name}}",
-	skillsMarketLoadMore: "載入更多",
-	skillsMarketCount: "已載入 {{count}} 筆結果",
 	pluginMarket: "外掛市場",
 	pluginMarketDescription: "從目前設定的市場來源探索並安裝外掛",
 	pluginInfo: "位置",
@@ -1520,7 +1521,6 @@ export default {
 	marketMcpUpdated: "更新於",
 	marketMcpPublished: "發佈於",
 	marketMcpNoSupportedMethod: "此項目未提供支援的安裝方式",
-	marketMcpSourceOrder: "依來源順序 · 已顯示 {{count}} 項",
 	marketMcpLoadMore: "載入更多",
 	marketMcpRetryPage: "重試載入更多",
 	marketMcpNoMatchesLoaded:

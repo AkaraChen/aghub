@@ -1224,9 +1224,13 @@ export default {
 	// skills.sh
 	searchMarketSkills: "Search skills.sh...",
 	searchMarketSkillsPlaceholder: "Enter skill name or keyword...",
-	searchToFindSkills: "Search to find skills from skills.sh",
 	poweredByVercel: "Powered by Vercel",
-	dataFromSkillsSh: "Data from skills.sh",
+	marketResultsCount_one: "{{count}} result",
+	marketResultsCount_other: "{{count}} results",
+	marketResultsLoaded_one: "{{count}} result loaded",
+	marketResultsLoaded_other: "{{count}} results loaded",
+	marketResultsFiltered: "{{filtered}} / {{count}} results",
+	marketResultsLoadedFiltered: "{{count}} loaded · {{filtered}} matching",
 
 	// MCP Detail
 	connection: "Connection",
@@ -1403,8 +1407,6 @@ export default {
 	marketplaceNoneTitle: "No marketplace sources configured",
 	marketplaceRefreshSource: "Refresh {{name}}",
 	marketplaceRemoveSource: "Remove {{name}}",
-	skillsMarketLoadMore: "Load more",
-	skillsMarketCount: "{{count}} loaded",
 	pluginMarket: "Plugin Market",
 	pluginMarketDescription:
 		"Discover and install plugins from your configured marketplace sources",
@@ -1528,7 +1530,6 @@ export default {
 	marketMcpUpdated: "Updated",
 	marketMcpPublished: "Published",
 	marketMcpNoSupportedMethod: "No supported install method provided",
-	marketMcpSourceOrder: "Source order · {{count}} shown",
 	marketMcpLoadMore: "Load more",
 	marketMcpRetryPage: "Retry loading more",
 	marketMcpNoMatchesLoaded:

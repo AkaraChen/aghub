@@ -92,9 +92,12 @@ test("search error can be retried and is not reported as an empty result", async
 	fails = false;
 	await page.getByRole("button", { name: "Retry", exact: true }).click();
 	await expect(page.getByText("No results", { exact: true })).toBeVisible();
+	await expect(
+		page.getByRole("status", { name: "Search results" }),
+	).toHaveText("0 results");
 });
 
-test("a full results page can load the next page without losing existing rows", async ({
+test("results load on scroll and distinguish loaded counts from complete results", async ({
 	page,
 }) => {
 	const limits: number[] = [];
@@ -114,19 +117,183 @@ test("a full results page can load the next page without losing existing rows", 
 		});
 	});
 	await page.goto("/market?q=skill");
-	await expect(page.getByText("100 loaded", { exact: true })).toBeVisible();
-	await page.getByRole("button", { name: "Load more", exact: true }).click();
-	await expect(page.getByText("102 loaded", { exact: true })).toBeVisible();
+	await expect(
+		page.getByRole("cell", { name: "skill-0", exact: true }),
+	).toBeVisible();
 	await expect(
 		page.getByRole("button", { name: "Load more", exact: true }),
 	).toHaveCount(0);
+	const summary = page.getByRole("status", { name: "Search results" });
+	await expect(summary).toHaveText("100 results loaded");
+	const scroller = page.locator('[data-virtuoso-scroller="true"]');
+	await expect
+		.poll(async () => {
+			await scroller.evaluate((element) => {
+				element.scrollTop = element.scrollHeight;
+			});
+			return page
+				.getByRole("cell", { name: "skill-101", exact: true })
+				.isVisible();
+		})
+		.toBe(true);
+	await expect(summary).toHaveText("102 results");
 	expect(limits).toEqual([100, 200]);
+	await scroller.evaluate((element) => {
+		element.scrollTop = 0;
+	});
 	await expect(
 		page.getByRole("cell", { name: "skill-0", exact: true }),
 	).toBeVisible();
 });
 
+test("scrolling survives a failed and delayed next page", async ({ page }) => {
+	const errors: string[] = [];
+	page.on("pageerror", (error) => errors.push(error.message));
+	page.on("console", (message) => {
+		if (
+			message.type() === "error" &&
+			message.text().includes("Maximum update depth")
+		)
+			errors.push(message.text());
+	});
+	let failNextPage = true;
+	const delayedPage = Promise.withResolvers<void>();
+	const limits: number[] = [];
+	await page.route(e2eApiUrl("/skills-market/search*"), async (route) => {
+		const limit = Number(
+			new URL(route.request().url()).searchParams.get("limit"),
+		);
+		limits.push(limit);
+		if (limit === 200) {
+			if (failNextPage) {
+				await route.fulfill({
+					status: 400,
+					json: { error: "Next page unavailable", code: "FIXTURE" },
+				});
+				return;
+			}
+			await delayedPage.promise;
+		}
+		await route.fulfill({
+			json: Array.from({ length: Math.min(limit, 201) }, (_, index) => ({
+				name: `skill-${index}`,
+				slug: `skill-${index}`,
+				source: "example/skills",
+				installs: 1000 - index,
+			})),
+		});
+	});
+	await page.goto("/market?q=skill");
+	await expect(
+		page.getByRole("cell", { name: "skill-0", exact: true }),
+	).toBeVisible();
+	const scroller = page.locator('[data-virtuoso-scroller="true"]');
+	const retry = page.getByRole("button", { name: "Retry", exact: true });
+	await expect
+		.poll(async () => {
+			await scroller.evaluate((element) => {
+				element.scrollTop = element.scrollHeight;
+			});
+			return retry.isVisible();
+		})
+		.toBe(true);
+	await expect(
+		page.getByText("Next page unavailable", { exact: true }),
+	).toBeVisible();
+	failNextPage = false;
+	await retry.click();
+	await expect(
+		page.getByRole("tabpanel", { name: "Skills.sh" }).getByRole("status", {
+			name: "Loading",
+		}),
+	).toBeVisible();
+	await expect
+		.poll(async () => {
+			await scroller.evaluate((element) => {
+				element.scrollTop = element.scrollHeight;
+			});
+			return page
+				.getByRole("cell", { name: "skill-99", exact: true })
+				.isVisible();
+		})
+		.toBe(true);
+	delayedPage.resolve();
+	await expect
+		.poll(async () => {
+			await scroller.evaluate((element) => {
+				element.scrollTop = element.scrollHeight;
+			});
+			return page
+				.getByRole("cell", { name: "skill-200", exact: true })
+				.isVisible();
+		})
+		.toBe(true);
+	await expect(retry).toHaveCount(0);
+	await expect(
+		page.getByText("Next page unavailable", { exact: true }),
+	).toHaveCount(0);
+	// Queries retry once before the manual retry becomes available.
+	expect(limits).toEqual([100, 200, 200, 200, 300]);
+	expect(errors).toEqual([]);
+});
+
 for (const theme of ["light", "dark"]) {
+	test(`empty skill search retains its centered entry in ${theme}`, async ({
+		page,
+	}, testInfo) => {
+		await page.addInitScript(
+			(theme) => localStorage.setItem("theme", theme),
+			theme,
+		);
+		await page.goto("/market");
+		const panel = page.getByRole("tabpanel", { name: "Skills.sh" });
+		const title = panel.getByRole("heading", {
+			name: "skills.sh",
+			exact: true,
+		});
+		await expect(title).toBeVisible();
+		await expect(
+			panel.getByText("Search to find skills from skills.sh", {
+				exact: true,
+			}),
+		).toHaveCount(0);
+		await expect(
+			panel.getByText("Data from skills.sh", { exact: true }),
+		).toHaveCount(0);
+		for (const width of [1280, 1024, 960]) {
+			await page.setViewportSize({
+				width,
+				height: width === 1024 ? 600 : 800,
+			});
+			await expect
+				.poll(async () => {
+					const bounds = await panel.boundingBox();
+					const heading = await title.boundingBox();
+					if (!bounds || !heading) return false;
+					return (
+						Math.abs(
+							heading.x +
+								heading.width / 2 -
+								bounds.x -
+								bounds.width / 2,
+						) < 2 && heading.y > bounds.y + 80
+					);
+				})
+				.toBe(true);
+			await expect
+				.poll(() =>
+					panel.evaluate(
+						(element) => element.scrollWidth <= element.clientWidth,
+					),
+				)
+				.toBe(true);
+			await expect(panel.getByRole("searchbox")).toBeVisible();
+		}
+		await page.screenshot({
+			path: testInfo.outputPath(`skills-entry-${theme}.png`),
+		});
+	});
+
 	test(`skills market contains long identities in ${theme} at desktop widths`, async ({
 		page,
 	}, testInfo) => {

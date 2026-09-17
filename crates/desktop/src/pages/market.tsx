@@ -149,7 +149,7 @@ export default function MarketPage() {
 				</Tabs.Panel>
 				<Tabs.Panel
 					id="mcp"
-					className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
+					className="min-h-0 flex-1 overflow-hidden p-0"
 				>
 					<McpMarketTab />
 				</Tabs.Panel>
