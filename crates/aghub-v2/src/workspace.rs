@@ -1,4 +1,6 @@
-use gpui_kit::component::sidebar::{Sidebar, SidebarMenu, SidebarMenuItem};
+use gpui_kit::component::sidebar::{
+	Sidebar, SidebarItem, SidebarMenu, SidebarMenuItem,
+};
 use gpui_kit::component::*;
 use gpui_kit::*;
 
@@ -11,8 +13,8 @@ enum Page {
 }
 
 impl Page {
-	fn all() -> [Self; 4] {
-		[Self::Home, Self::Plugins, Self::Manage, Self::Settings]
+	fn nav_pages() -> [Self; 3] {
+		[Self::Home, Self::Plugins, Self::Manage]
 	}
 
 	fn title(self) -> &'static str {
@@ -68,22 +70,40 @@ impl Workspace {
 		cx.notify();
 	}
 
-	fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+	fn menu_item(
+		page: Page,
+		current: Page,
+		workspace: Entity<Self>,
+	) -> SidebarMenuItem {
+		SidebarMenuItem::new(page.title())
+			.icon(page.icon())
+			.active(current == page)
+			.on_click(move |_, window, cx| {
+				workspace.update(cx, |this, cx| {
+					this.open_page(page, window, cx);
+				});
+			})
+	}
+
+	fn render_sidebar(
+		&self,
+		window: &mut Window,
+		cx: &mut Context<Self>,
+	) -> impl IntoElement {
 		let workspace = cx.entity();
 		let current = self.page;
-		Sidebar::new("workspace-nav").collapsible(false).child(
-			SidebarMenu::new().children(Page::all().map(|page| {
-				let workspace = workspace.clone();
-				SidebarMenuItem::new(page.title())
-					.icon(page.icon())
-					.active(current == page)
-					.on_click(move |_, window, cx| {
-						workspace.update(cx, |this, cx| {
-							this.open_page(page, window, cx);
-						});
-					})
-			})),
-		)
+		Sidebar::new("workspace-nav")
+			.collapsible(false)
+			.child(SidebarMenu::new().children(
+				Page::nav_pages().map(|page| {
+					Self::menu_item(page, current, workspace.clone())
+				}),
+			))
+			.footer(Self::menu_item(Page::Settings, current, workspace).render(
+				"workspace-nav-settings",
+				window,
+				cx,
+			))
 	}
 
 	fn render_page(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -101,13 +121,13 @@ impl Workspace {
 impl Render for Workspace {
 	fn render(
 		&mut self,
-		_: &mut Window,
+		window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
 		h_flex()
 			.items_stretch()
 			.size_full()
-			.child(self.render_sidebar(cx))
+			.child(self.render_sidebar(window, cx))
 			.child(self.render_page(cx))
 	}
 }
