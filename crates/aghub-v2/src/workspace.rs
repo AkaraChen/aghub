@@ -1,30 +1,72 @@
 use crate::fonts;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::sidebar::{
 	Sidebar, SidebarItem, SidebarMenu, SidebarMenuItem,
 };
 use gpui_kit::component::*;
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use phosphor_gpui::IconName as Phosphor;
 use rust_i18n::t;
+
+#[derive(IntoElement)]
+struct PageHeader {
+	title: SharedString,
+	trailing: Option<AnyElement>,
+}
+
+impl PageHeader {
+	fn new(title: impl Into<SharedString>) -> Self {
+		Self {
+			title: title.into(),
+			trailing: None,
+		}
+	}
+
+	fn trailing(mut self, trailing: impl IntoElement) -> Self {
+		self.trailing = Some(trailing.into_any_element());
+		self
+	}
+}
+
+impl RenderOnce for PageHeader {
+	fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+		h_flex()
+			.w_full()
+			.items_center()
+			.justify_between()
+			.child(
+				div()
+					.min_w_0()
+					.flex_1()
+					.text_base()
+					.truncate()
+					.child(self.title),
+			)
+			.when_some(self.trailing, |this, trailing| {
+				this.child(div().flex_shrink_0().child(trailing))
+			})
+	}
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
 	Subscribe,
 	Plugins,
-	Manage,
+	Project,
 	Settings,
 }
 
 impl Page {
 	fn nav_pages() -> [Self; 3] {
-		[Self::Subscribe, Self::Plugins, Self::Manage]
+		[Self::Subscribe, Self::Plugins, Self::Project]
 	}
 
 	fn title(self) -> String {
 		match self {
 			Self::Subscribe => t!("nav.subscribe").into(),
 			Self::Plugins => t!("nav.plugins").into(),
-			Self::Manage => t!("nav.manage").into(),
+			Self::Project => t!("nav.project").into(),
 			Self::Settings => t!("nav.settings").into(),
 		}
 	}
@@ -33,7 +75,7 @@ impl Page {
 		match self {
 			Self::Subscribe => Phosphor::Rss.duotone(),
 			Self::Plugins => Phosphor::PuzzlePiece.duotone(),
-			Self::Manage => Phosphor::Folder.duotone(),
+			Self::Project => Phosphor::Folder.duotone(),
 			Self::Settings => Phosphor::Gear.duotone(),
 		}
 	}
@@ -118,6 +160,26 @@ impl Workspace {
 			))
 	}
 
+	fn subscribe_refresh_button() -> impl IntoElement {
+		let refresh = t!("action.refresh");
+		Button::new("subscribe-refresh")
+			.ghost()
+			.small()
+			.icon(Phosphor::ArrowClockwise.duotone())
+			.tooltip(refresh.clone())
+			.accessibility_label(refresh)
+	}
+
+	fn render_page_header(&self) -> impl IntoElement {
+		let header = PageHeader::new(self.page.title());
+		match self.page {
+			Page::Subscribe => {
+				header.trailing(Self::subscribe_refresh_button())
+			}
+			_ => header,
+		}
+	}
+
 	fn render_page(&self, cx: &mut Context<Self>) -> impl IntoElement {
 		v_flex()
 			.flex_1()
@@ -125,8 +187,8 @@ impl Workspace {
 			.h_full()
 			.bg(cx.theme().background)
 			.text_color(cx.theme().foreground)
-			.p_6()
-			.child(div().text_lg().child(self.page.title()))
+			.p_4()
+			.child(self.render_page_header())
 	}
 }
 

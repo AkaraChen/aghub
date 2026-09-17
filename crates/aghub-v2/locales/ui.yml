@@ -6,12 +6,16 @@ nav:
   plugins:
     en: Plugins
     zh-CN: 插件
-  manage:
-    en: Manage
-    zh-CN: 管理
+  project:
+    en: Project
+    zh-CN: 项目
   settings:
     en: Settings
     zh-CN: 设置
+action:
+  refresh:
+    en: Refresh
+    zh-CN: 刷新
 scope:
   global:
     en: Global
