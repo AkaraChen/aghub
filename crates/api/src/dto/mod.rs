@@ -11,5 +11,6 @@ pub mod plugin;
 pub mod prompt;
 pub mod rule;
 pub mod skill;
+pub mod skill_source;
 pub mod sub_agent;
 pub mod transfer;

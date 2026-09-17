@@ -304,6 +304,7 @@ fn build_rocket(
 				routes::skills::open_skill_folder,
 				routes::skills::edit_skill_folder,
 				routes::skills::get_skill_content,
+				routes::skills::get_skill_source,
 				routes::skills::audit_skill,
 				routes::skills::get_skill_tree,
 				routes::skills::diff_skill,
@@ -1021,6 +1022,80 @@ mod tests {
 				.len(),
 			1
 		);
+	}
+
+	#[test]
+	fn route_skill_source_reads_existing_metadata_without_writing() {
+		let data = tempfile::tempdir().unwrap();
+		let project = tempfile::tempdir().unwrap();
+		let installed = project.path().join(".agents/skills/demo");
+		write_import_skill(&installed, "demo", "instruction");
+		let document = installed.join("SKILL.md");
+		let content = concat!(
+			"---\nname: demo\ndescription: demo\nmetadata:\n",
+			"  github-repo: https://github.com/example/skills\n",
+			"  github-path: skills/demo\n  github-ref: v1\n",
+			"  github-pinned: v1\n---\ninstruction"
+		);
+		std::fs::write(&document, content).unwrap();
+		let client = test_client(data.path());
+		let uri = format!(
+			"/api/v1/skills/source?{}",
+			skill_content_query(&document, project.path())
+		);
+		assert_json_error(
+			client.get(&uri).dispatch(),
+			Status::Unauthorized,
+			"UNAUTHORIZED",
+		);
+		let response = get_auth(&client, &uri);
+		assert_eq!(response.status(), Status::Ok);
+		let response = response_json(response);
+		assert_eq!(response["source"], "example/skills");
+		assert_eq!(response["skill_path"], "skills/demo/SKILL.md");
+		assert_eq!(response["pinned_ref"], "v1");
+		assert_eq!(response["evidence"], "github_cli");
+		assert_eq!(response["repository_managed"], false);
+		assert_eq!(std::fs::read_to_string(document).unwrap(), content);
+		assert!(!project.path().join("skills-lock.json").exists());
+		assert!(!project.path().join(".git").exists());
+	}
+
+	#[test]
+	fn route_skill_source_rejects_outside_paths_and_credential_urls() {
+		let data = tempfile::tempdir().unwrap();
+		let project = tempfile::tempdir().unwrap();
+		let outside = data.path().join("private/demo");
+		write_import_skill(&outside, "demo", "private content");
+		let client = test_client(data.path());
+		let uri = format!(
+			"/api/v1/skills/source?{}",
+			skill_content_query(&outside.join("SKILL.md"), project.path())
+		);
+		let response = get_auth(&client, &uri);
+		assert_eq!(response.status(), Status::Forbidden);
+		assert!(!response.into_string().unwrap().contains("private content"));
+		let installed = project.path().join(".agents/skills/demo");
+		write_import_skill(&installed, "demo", "instruction");
+		let document = installed.join("SKILL.md");
+		std::fs::write(
+			&document,
+			concat!(
+				"---\nname: demo\ndescription: demo\nmetadata:\n",
+				"  github-repo: https://user:private-token@github.com/",
+				"example/skills\n---\nbody"
+			),
+		)
+		.unwrap();
+		let uri = format!(
+			"/api/v1/skills/source?{}",
+			skill_content_query(&document, project.path())
+		);
+		let response = get_auth(&client, &uri);
+		assert_eq!(response.status(), Status::BadRequest);
+		let body = response.into_string().unwrap();
+		assert!(!body.contains("private-token"));
+		assert!(body.contains("SKILL_SOURCE_INVALID"));
 	}
 
 	#[test]

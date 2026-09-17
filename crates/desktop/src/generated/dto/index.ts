@@ -156,6 +156,7 @@ export type { SkillLockEntryResponse } from "./SkillLockEntryResponse";
 export type { SkillProviderKindResponse } from "./SkillProviderKindResponse";
 export type { SkillProviderLoadErrorResponse } from "./SkillProviderLoadErrorResponse";
 export type { SkillProviderResponse } from "./SkillProviderResponse";
+export type { SkillRepositorySourceResponse } from "./SkillRepositorySourceResponse";
 export type { SkillResponse } from "./SkillResponse";
 export type { SkillTreeNodeKind } from "./SkillTreeNodeKind";
 export type { SkillTreeNodeResponse } from "./SkillTreeNodeResponse";

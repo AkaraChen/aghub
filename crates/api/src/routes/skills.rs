@@ -2294,9 +2294,11 @@ pub fn get_skill_tree(
 }
 
 mod conflicts;
+mod source;
 pub use conflicts::{diff_skill, get_skill_copy_status, resolve_skill_copies};
 #[cfg(test)]
 use conflicts::{retain_skill_diff_previews, skill_directory_diff_response};
+pub use source::get_skill_source;
 
 #[get("/skills/lock/global")]
 pub fn get_global_skill_lock(

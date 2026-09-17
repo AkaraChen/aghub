@@ -270,6 +270,7 @@ name = "aghub-core"
 version = "1.9.0-beta.1"
 dependencies = [
  "aghub-agents",
+ "aghub-git",
  "dirs 6.0.0",
  "log",
  "serde",

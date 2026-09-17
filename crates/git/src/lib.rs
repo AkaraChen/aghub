@@ -35,6 +35,7 @@ pub mod credentials;
 pub mod error;
 pub mod remote;
 pub mod repository;
+pub mod skill_source;
 pub mod source;
 
 // Re-export commonly used items

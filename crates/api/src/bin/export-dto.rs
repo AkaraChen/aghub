@@ -94,6 +94,7 @@ use aghub_api::dto::{
 		SkillTreeNodeResponse, SkillTreeQuery, SkillTreeSkillResponse,
 		UpdateSkillRequest, ValidationError,
 	},
+	skill_source::SkillRepositorySourceResponse,
 	sub_agent::{
 		CreateSubAgentRequest, SubAgentResponse, UpdateSubAgentRequest,
 	},
@@ -237,6 +238,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<CodexVisibleCopyRequest>(&cfg)?;
 	export_type::<CodexVisibleCopyResponse>(&cfg)?;
 	export_type::<SkillResponse>(&cfg)?;
+	export_type::<SkillRepositorySourceResponse>(&cfg)?;
 	export_type::<SkillLinkStatusResponse>(&cfg)?;
 	export_type::<SkillLinkResponse>(&cfg)?;
 	export_type::<SkillHardLinkResponse>(&cfg)?;
