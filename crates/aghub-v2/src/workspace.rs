@@ -1,4 +1,4 @@
-use gpui_kit::component::select::{Select, SelectState};
+use crate::fonts;
 use gpui_kit::component::sidebar::{
 	Sidebar, SidebarItem, SidebarMenu, SidebarMenuItem,
 };
@@ -9,7 +9,7 @@ use rust_i18n::t;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
-	Home,
+	Subscribe,
 	Plugins,
 	Manage,
 	Settings,
@@ -17,12 +17,12 @@ enum Page {
 
 impl Page {
 	fn nav_pages() -> [Self; 3] {
-		[Self::Home, Self::Plugins, Self::Manage]
+		[Self::Subscribe, Self::Plugins, Self::Manage]
 	}
 
 	fn title(self) -> String {
 		match self {
-			Self::Home => t!("nav.home").into(),
+			Self::Subscribe => t!("nav.subscribe").into(),
 			Self::Plugins => t!("nav.plugins").into(),
 			Self::Manage => t!("nav.manage").into(),
 			Self::Settings => t!("nav.settings").into(),
@@ -31,7 +31,7 @@ impl Page {
 
 	fn icon(self) -> phosphor_gpui::Icon {
 		match self {
-			Self::Home => Phosphor::House.duotone(),
+			Self::Subscribe => Phosphor::Rss.duotone(),
 			Self::Plugins => Phosphor::PuzzlePiece.duotone(),
 			Self::Manage => Phosphor::Folder.duotone(),
 			Self::Settings => Phosphor::Gear.duotone(),
@@ -41,7 +41,6 @@ impl Page {
 
 pub struct Workspace {
 	page: Page,
-	scope: Entity<SelectState<Vec<SharedString>>>,
 	_appearance: Subscription,
 }
 
@@ -52,46 +51,21 @@ impl Workspace {
 			cx.observe_window_appearance(window, |_, window, cx| {
 				Theme::sync_system_appearance(Some(window), cx);
 			});
-		let scope = cx.new(|cx| {
-			SelectState::new(Vec::<SharedString>::new(), None, window, cx)
-		});
 		let this = Self {
-			page: Page::Home,
-			scope,
+			page: Page::Subscribe,
 			_appearance: appearance,
 		};
 		window.set_window_title(&this.page.title());
 		this
 	}
 
-	fn render_title_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-		TitleBar::new()
-			.child(
-				div()
-					.text_sm()
-					.font_weight(FontWeight::MEDIUM)
-					.child("aghub"),
-			)
-			.child(
-				h_flex().items_center().pr_3().child(
-					h_flex()
-						.id("scope-switcher")
-						.items_center()
-						.bg(cx.theme().secondary)
-						.border_1()
-						.border_color(cx.theme().border)
-						.rounded(cx.theme().radius)
-						.hover(|this| this.bg(cx.theme().secondary_hover))
-						.child(
-							Select::new(&self.scope)
-								.xsmall()
-								.w_32()
-								.appearance(false)
-								.placeholder("Scope")
-								.accessibility_label("Scope"),
-						),
-				),
-			)
+	fn render_title_bar(&self) -> impl IntoElement {
+		TitleBar::new().child(
+			div()
+				.text_sm()
+				.font_family(fonts::INSTRUMENT_SERIF)
+				.child("aghub"),
+		)
 	}
 
 	fn open_page(
@@ -162,7 +136,7 @@ impl Render for Workspace {
 		window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		v_flex().size_full().child(self.render_title_bar(cx)).child(
+		v_flex().size_full().child(self.render_title_bar()).child(
 			h_flex()
 				.items_stretch()
 				.flex_1()

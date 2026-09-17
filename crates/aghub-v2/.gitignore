@@ -1,5 +1,9 @@
 /target
 **/*.rs.bk
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
 .agents/
 .claude/
 .grok/

@@ -1,6 +1,9 @@
+mod fonts;
 mod i18n;
 mod theme;
 mod workspace;
+
+use aghub::db;
 
 use gpui_kit::component::*;
 use gpui_kit::*;
@@ -20,8 +23,10 @@ fn main() {
 	app.run(move |cx| {
 		// This must be called before using any GPUI Component features.
 		gpui_kit::init(cx);
+		fonts::init(cx);
 		theme::init(cx);
 		i18n::init();
+		db::init(cx);
 
 		let options = WindowOptions {
 			window_bounds: Some(WindowBounds::centered(DESIGN_WINDOW_SIZE, cx)),
@@ -29,6 +34,12 @@ fn main() {
 		};
 
 		cx.spawn(async move |cx| {
+			if let Err(error) = db::open(cx).await {
+				eprintln!("{error:#}");
+				cx.update(|cx| cx.quit());
+				return;
+			}
+
 			cx.open_window(options, |window, cx| {
 				let view = cx.new(|cx| Workspace::new(window, cx));
 				// This first level on the window, should be a Root.

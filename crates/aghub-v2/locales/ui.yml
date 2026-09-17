@@ -1,8 +1,8 @@
 _version: 2
 nav:
-  home:
-    en: Home
-    zh-CN: 主页
+  subscribe:
+    en: Subscribe
+    zh-CN: 订阅
   plugins:
     en: Plugins
     zh-CN: 插件
@@ -12,3 +12,13 @@ nav:
   settings:
     en: Settings
     zh-CN: 设置
+scope:
+  global:
+    en: Global
+    zh-CN: 全局
+  label:
+    en: Scope
+    zh-CN: 范围
+  load_failed:
+    en: Couldn't load projects
+    zh-CN: 无法加载项目
