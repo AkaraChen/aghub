@@ -1,0 +1,8 @@
+# rustfmt.toml
+# https://rust-lang.github.io/rustfmt/
+
+hard_tabs = true
+tab_spaces = 4
+max_width = 80
+newline_style = "Unix"
+edition = "2024"
