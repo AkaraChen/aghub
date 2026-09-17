@@ -34,6 +34,10 @@ use crate::{
 		CodexVisibleCopySelection,
 	},
 	dto::audit::{AuditReportDto, AuditRequest},
+	dto::common::{
+		ResourceOriginDto, ResourceSourceKindDto, ResourceWritePolicyDto,
+		RuntimeVisibilityDto,
+	},
 	dto::integrations::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
 	},
@@ -193,6 +197,7 @@ impl SkillListParams {
 		SkillDiscoveryOptions {
 			include_nested: self.include_nested.unwrap_or(true),
 			include_dependencies: self.include_dependencies.unwrap_or(true),
+			include_flat_markdown: false,
 		}
 	}
 }
@@ -1626,6 +1631,7 @@ pub(crate) async fn list_all_agents_skills(
 				source_path,
 				is_symlink: skill.canonical_path.is_some(),
 				source: source.into(),
+				origin: skill.origin.as_ref().map(Into::into),
 				provider: None,
 			};
 			if let Some(index) = item_indices.get(&skill.name).copied() {
@@ -1883,6 +1889,26 @@ fn codex_skill_discovery_response(
 				qualified_name: skill.qualified_name,
 				managed: true,
 			};
+			let origin = ResourceOriginDto {
+				product_id: "codex".to_string(),
+				surface_ids: vec!["cli".to_string()],
+				scope: source,
+				source_kind: match provider.kind {
+					SkillProviderKindResponse::Plugin => {
+						ResourceSourceKindDto::Plugin
+					}
+					SkillProviderKindResponse::System => {
+						ResourceSourceKindDto::System
+					}
+				},
+				physical_location: Some(source_path.clone()),
+				precedence: 0,
+				write_policy: ResourceWritePolicyDto::ManagedExternally,
+				runtime_visibility: RuntimeVisibilityDto::Visible,
+				runtime_visibility_evidence: Some(
+					"reported by the Codex app server".to_string(),
+				),
+			};
 			Some(SkillResponse {
 				name: skill.base_name,
 				display_name: skill.display_name,
@@ -1895,10 +1921,12 @@ fn codex_skill_discovery_response(
 				tools: Vec::new(),
 				source: Some(source),
 				agent: Some("codex".to_string()),
+				origin: Some(origin.clone()),
 				locations: Some(vec![SkillLocationResponse {
 					source_path,
 					is_symlink: false,
 					source,
+					origin: Some(origin),
 					provider: Some(provider),
 				}]),
 			})
@@ -3009,6 +3037,18 @@ mod tests {
 			.provider
 			.as_ref()
 			.unwrap();
+		let origin = plugin.origin.as_ref().unwrap();
+		assert_eq!(origin.product_id, "codex");
+		assert_eq!(origin.surface_ids, ["cli"]);
+		assert!(matches!(origin.source_kind, ResourceSourceKindDto::Plugin));
+		assert!(matches!(
+			origin.write_policy,
+			ResourceWritePolicyDto::ManagedExternally
+		));
+		assert!(origin
+			.physical_location
+			.as_deref()
+			.is_some_and(|path| path.ends_with("SKILL.md")));
 		assert_eq!(provider.qualified_name, "cloudflare:agents-sdk");
 		assert_eq!(
 			provider.id.as_deref(),
@@ -4013,6 +4053,7 @@ mod tests {
 			SkillDiscoveryOptions {
 				include_nested: true,
 				include_dependencies: true,
+				include_flat_markdown: false,
 			}
 		);
 	}
@@ -4034,6 +4075,7 @@ mod tests {
 			SkillDiscoveryOptions {
 				include_nested: false,
 				include_dependencies: false,
+				include_flat_markdown: false,
 			}
 		);
 	}

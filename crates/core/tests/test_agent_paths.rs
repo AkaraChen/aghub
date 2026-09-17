@@ -153,6 +153,36 @@ fn test_pi_has_no_mcp_capabilities() {
 	assert!(!descriptor.capabilities.mcp.streamable_http);
 }
 
+#[test]
+fn deepseek_harness_reads_direct_bundles_and_flat_markdown_only() {
+	let test = aghub_core::testing::TestConfig::new(
+		aghub_core::AgentType::DeepSeekHarness,
+	)
+	.unwrap();
+	write_import_skill(&test.skills_dir().join("direct"), "direct", "body");
+	write_import_skill(
+		&test.skills_dir().join("collection/nested"),
+		"nested",
+		"body",
+	);
+	std::fs::write(
+		test.skills_dir().join("flat.md"),
+		"---\nname: flat\ndescription: Flat skill\n---\n\nFlat body\n",
+	)
+	.unwrap();
+
+	let mut manager = test.create_manager();
+	let names = manager
+		.load()
+		.unwrap()
+		.skills
+		.iter()
+		.map(|skill| skill.name.as_str())
+		.collect::<Vec<_>>();
+
+	assert_eq!(names, vec!["direct", "flat"]);
+}
+
 // ─── OpenClaw fallback path tests (openclaw-paths.test.ts) ──────────────────
 
 #[test]

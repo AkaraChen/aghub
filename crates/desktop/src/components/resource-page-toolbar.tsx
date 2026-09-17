@@ -83,7 +83,7 @@ function AgentFilterControl({ agentId, onChange }: AgentFilterControlProps) {
 	const installedAgents = useMemo(
 		() =>
 			[...availableAgents]
-				.filter((agent) => agent.isUsable)
+				.filter((agent) => agent.isConfigurable)
 				.sort((a, b) => a.display_name.localeCompare(b.display_name)),
 		[availableAgents],
 	);

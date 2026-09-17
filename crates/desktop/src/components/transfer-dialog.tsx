@@ -205,7 +205,7 @@ export function TransferDialog({
 	const usableAgents = useMemo(
 		() =>
 			(availableAgents ?? []).filter((agent) => {
-				if (!agent?.isUsable) return false;
+				if (!agent?.isConfigurable) return false;
 				if (!selectedScope) {
 					if (resourceType === "mcp") {
 						return items.every((item) =>

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { agentInfo, e2eApiUrl, installMocks } from "./mocks";
+import { agentAvailability, agentInfo, e2eApiUrl, installMocks } from "./mocks";
 
 test.beforeEach(async ({ page }) => {
 	await installMocks(page);
@@ -32,14 +32,7 @@ test("JetBrains AI uses its bundled icon", async ({ page }) => {
 		route.fulfill({
 			status: 200,
 			contentType: "application/json",
-			body: JSON.stringify([
-				{
-					id: "jetbrains-ai",
-					has_global_directory: true,
-					has_cli: true,
-					is_available: true,
-				},
-			]),
+			body: JSON.stringify([agentAvailability("jetbrains-ai")]),
 		}),
 	);
 
@@ -50,4 +43,37 @@ test("JetBrains AI uses its bundled icon", async ({ page }) => {
 	await expect(card).toBeVisible();
 	await expect(card.locator('[data-slot="avatar-fallback"]')).toHaveCount(0);
 	await expect(card.locator("svg")).toHaveCount(1);
+});
+
+test("separates detected and configurable Agents", async ({ page }) => {
+	await page.route(e2eApiUrl("/agents"), (route) =>
+		route.fulfill({
+			json: [
+				agentInfo("claude", "Claude"),
+				agentInfo("grok", "Grok Build"),
+			],
+		}),
+	);
+	await page.route(e2eApiUrl("/agents/availability"), (route) =>
+		route.fulfill({
+			json: [
+				agentAvailability("claude"),
+				agentAvailability("grok", "not_detected", false),
+			],
+		}),
+	);
+
+	await page.goto("/settings?tab=agents");
+
+	const yourAgents = page.getByRole("region", { name: "Your Agents" });
+	const supportedAgents = page.getByRole("region", {
+		name: "Supported Agents",
+	});
+	await expect(yourAgents.getByText("Claude", { exact: true })).toBeVisible();
+	await expect(
+		supportedAgents.getByText("Grok Build", { exact: true }),
+	).toBeVisible();
+	await expect(
+		supportedAgents.getByText("Configuration can be prepared"),
+	).toBeVisible();
 });

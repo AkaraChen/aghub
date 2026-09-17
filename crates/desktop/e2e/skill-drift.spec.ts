@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { SkillDirectoryDiffResponse } from "../src/generated/dto";
-import { agentInfo, e2eApiUrl, installMocks } from "./mocks";
+import { agentAvailability, agentInfo, e2eApiUrl, installMocks } from "./mocks";
 
 const modifiedSkillDiff: SkillDirectoryDiffResponse = {
 	identical: false,
@@ -906,14 +906,7 @@ test("matching copies show every concrete path and relationship", async ({
 		route.fulfill({
 			status: 200,
 			contentType: "application/json",
-			body: JSON.stringify(
-				agents.map(([id]) => ({
-					id,
-					has_global_directory: true,
-					has_cli: true,
-					is_available: true,
-				})),
-			),
+			body: JSON.stringify(agents.map(([id]) => agentAvailability(id))),
 		}),
 	);
 	for (const [agent] of agents.slice(2)) {

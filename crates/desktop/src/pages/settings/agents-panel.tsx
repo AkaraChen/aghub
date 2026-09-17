@@ -37,9 +37,7 @@ export default function AgentsPanel() {
 		}
 	};
 
-	let filteredAgents = availableAgents.filter(
-		(agent) => agent.availability.is_available,
-	);
+	let filteredAgents = [...availableAgents];
 
 	// Apply search filter
 	if (agentSearch.trim()) {
@@ -63,6 +61,8 @@ export default function AgentsPanel() {
 		if (a.isDisabled === b.isDisabled) return 0;
 		return a.isDisabled ? 1 : -1;
 	});
+	const detectedAgents = filteredAgents.filter((agent) => agent.isDetected);
+	const supportedAgents = filteredAgents.filter((agent) => !agent.isDetected);
 
 	return (
 		<div className="space-y-3">
@@ -114,10 +114,9 @@ export default function AgentsPanel() {
 				</ToggleButtonGroup>
 			</div>
 
-			{/* Agents Card */}
-			<Card>
-				<Card.Content>
-					{filteredAgents.length === 0 ? (
+			{filteredAgents.length === 0 ? (
+				<Card>
+					<Card.Content>
 						<div
 							className="
               flex flex-col items-center justify-center py-16
@@ -138,25 +137,74 @@ export default function AgentsPanel() {
 									: t("noAgentsDescription")}
 							</p>
 						</div>
-					) : (
-						<div
-							className="
+					</Card.Content>
+				</Card>
+			) : (
+				<>
+					{detectedAgents.length > 0 && (
+						<section
+							aria-label={t("yourAgents")}
+							className="space-y-2"
+						>
+							<h3 className="text-sm font-medium">
+								{t("yourAgents")}
+							</h3>
+							<Card>
+								<Card.Content>
+									<div
+										className="
               grid grid-cols-1 gap-3
               sm:grid-cols-2
             "
-						>
-							{filteredAgents.map((agent) => (
-								<AgentCard
-									key={agent.id}
-									agent={agent}
-									isUpdating={updating === agent.id}
-									onToggle={handleToggleAgent}
-								/>
-							))}
-						</div>
+									>
+										{detectedAgents.map((agent) => (
+											<AgentCard
+												key={agent.id}
+												agent={agent}
+												isUpdating={
+													updating === agent.id
+												}
+												onToggle={handleToggleAgent}
+											/>
+										))}
+									</div>
+								</Card.Content>
+							</Card>
+						</section>
 					)}
-				</Card.Content>
-			</Card>
+					{supportedAgents.length > 0 && (
+						<section
+							aria-label={t("supportedAgents")}
+							className="space-y-2"
+						>
+							<h3 className="text-sm font-medium">
+								{t("supportedAgents")}
+							</h3>
+							<Card>
+								<Card.Content>
+									<div
+										className="
+              grid grid-cols-1 gap-3
+              sm:grid-cols-2
+            "
+									>
+										{supportedAgents.map((agent) => (
+											<AgentCard
+												key={agent.id}
+												agent={agent}
+												isUpdating={
+													updating === agent.id
+												}
+												onToggle={handleToggleAgent}
+											/>
+										))}
+									</div>
+								</Card.Content>
+							</Card>
+						</section>
+					)}
+				</>
+			)}
 		</div>
 	);
 }

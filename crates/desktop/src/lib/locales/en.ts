@@ -778,7 +778,21 @@ export default {
 		"Manage which agents are available for creating skills and MCP servers. Disable agents you don't use.",
 	globalConfig: "Global Config",
 	cli: "CLI",
+	ide: "IDE",
+	desktop: "Desktop",
+	cloud: "Cloud",
+	remoteWorkspace: "Remote workspace",
 	detectedVia: "Detected via {{sources}}",
+	supportedAgents: "Supported Agents",
+	configurationCanBePrepared: "Configuration can be prepared",
+	configurationFoundRuntimeUnknown:
+		"Configuration found; runtime not confirmed",
+	detectionFailedCanPrepare:
+		"Detection failed; configuration can still be prepared",
+	detectionUnknownCanPrepare:
+		"Runtime detection unavailable; configuration can be prepared",
+	prepareConfigRuntimeUnconfirmed:
+		"aghub will prepare files, but has not confirmed this Agent runtime.",
 	available: "Available",
 	notAvailable: "Not Available",
 	disabledByUser: "Disabled",

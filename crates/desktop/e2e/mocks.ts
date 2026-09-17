@@ -6,6 +6,7 @@ import type { Page } from "@playwright/test";
 import type {
 	CcusageRuntimeDto,
 	CcusageRuntimeSource,
+	AgentAvailabilityDto,
 	CodexSkillDiscoveryResponse,
 	CodexVisibleCopyRequest,
 	CreateMcpRequest,
@@ -35,6 +36,7 @@ export const agentInfo = (
 ) => ({
 	id,
 	display_name: displayName,
+	surfaces: [],
 	capabilities: {
 		skills: {
 			scopes: { global: true, project: true },
@@ -62,6 +64,37 @@ export const agentInfo = (
 	},
 });
 
+export const agentAvailability = (
+	id: string,
+	state: AgentAvailabilityDto["state"] = "detected",
+	configured = true,
+): AgentAvailabilityDto => ({
+	id,
+	state,
+	configured,
+	surfaces: [
+		{
+			id: "cli",
+			kind: "cli",
+			state,
+			configured,
+			evidence: [
+				{
+					kind: "command",
+					target: id,
+					result: state === "detected" ? "detected" : "absent",
+				},
+			],
+			configuration: [
+				{
+					path: `/tmp/e2e/.${id}`,
+					exists: configured,
+				},
+			],
+		},
+	],
+});
+
 const gemini = agentInfo("gemini", "Gemini", true);
 gemini.capabilities.mcp.remote = false;
 gemini.capabilities.mcp.sse = false;
@@ -76,24 +109,9 @@ const AGENTS = [
 ];
 
 const AVAILABILITY = [
-	{
-		id: "claude",
-		has_global_directory: true,
-		has_cli: true,
-		is_available: true,
-	},
-	{
-		id: "cursor",
-		has_global_directory: true,
-		has_cli: true,
-		is_available: true,
-	},
-	{
-		id: "gemini",
-		has_global_directory: true,
-		has_cli: true,
-		is_available: true,
-	},
+	agentAvailability("claude"),
+	agentAvailability("cursor"),
+	agentAvailability("gemini"),
 ];
 
 const USAGE_AGENTS = [
@@ -1201,12 +1219,7 @@ export async function installMocks(page: Page) {
 				agents.push(agentInfo("codex", "OpenAI Codex"));
 			}
 			if (!availability.some((item) => item.id === "codex")) {
-				availability.push({
-					id: "codex",
-					has_global_directory: true,
-					has_cli: true,
-					is_available: true,
-				});
+				availability.push(agentAvailability("codex"));
 			}
 		},
 		getCodexVisibleCopyRequests() {
@@ -1338,12 +1351,7 @@ export async function installMocks(page: Page) {
 				agents.push(agentInfo(id, displayName, universal));
 			}
 			if (!availability.some((agent) => agent.id === id)) {
-				availability.push({
-					id,
-					has_global_directory: true,
-					has_cli: true,
-					is_available: true,
-				});
+				availability.push(agentAvailability(id));
 			}
 		},
 		setRuleContent(path: string, content: string) {

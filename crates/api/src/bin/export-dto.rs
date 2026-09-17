@@ -6,7 +6,10 @@ use std::{
 
 use aghub_api::dto::{
 	agents::{
-		AgentAvailabilityDto, AgentInfo, CapabilitiesDto, McpCapabilitiesDto,
+		AgentAvailabilityDto, AgentInfo, AgentSurfaceAvailabilityDto,
+		AgentSurfaceInfoDto, AgentSurfaceKindDto, CapabilitiesDto,
+		ConfigurationEvidenceDto, DetectionEvidenceDto, DetectionProbeKindDto,
+		DetectionResultDto, DetectionStateDto, McpCapabilitiesDto,
 		ScopeSupportDto, SkillCapabilitiesDto, SkillsPathsDto,
 		SubAgentCapabilitiesDto,
 	},
@@ -14,7 +17,10 @@ use aghub_api::dto::{
 		AuditReportDto, AuditRequest, CategoryDto, ConfidenceDto, FindingDto,
 		FindingSourceDto, SeverityDto, VerdictDto,
 	},
-	common::ConfigSource,
+	common::{
+		ConfigSource, ResourceOriginDto, ResourceSourceKindDto,
+		ResourceWritePolicyDto, RuntimeVisibilityDto,
+	},
 	credential::{CreateCredentialRequest, CredentialResponse},
 	inference::{
 		AgentProviderCredentialDto,
@@ -180,9 +186,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<SubAgentCapabilitiesDto>(&cfg)?;
 	export_type::<CapabilitiesDto>(&cfg)?;
 	export_type::<SkillsPathsDto>(&cfg)?;
+	export_type::<AgentSurfaceKindDto>(&cfg)?;
+	export_type::<AgentSurfaceInfoDto>(&cfg)?;
 	export_type::<AgentInfo>(&cfg)?;
+	export_type::<DetectionStateDto>(&cfg)?;
+	export_type::<DetectionProbeKindDto>(&cfg)?;
+	export_type::<DetectionResultDto>(&cfg)?;
+	export_type::<DetectionEvidenceDto>(&cfg)?;
+	export_type::<ConfigurationEvidenceDto>(&cfg)?;
+	export_type::<AgentSurfaceAvailabilityDto>(&cfg)?;
 	export_type::<AgentAvailabilityDto>(&cfg)?;
 	export_type::<ConfigSource>(&cfg)?;
+	export_type::<ResourceSourceKindDto>(&cfg)?;
+	export_type::<ResourceWritePolicyDto>(&cfg)?;
+	export_type::<RuntimeVisibilityDto>(&cfg)?;
+	export_type::<ResourceOriginDto>(&cfg)?;
 	export_type::<CreateCredentialRequest>(&cfg)?;
 	export_type::<CredentialResponse>(&cfg)?;
 	export_type::<AgentProviderSourceDto>(&cfg)?;
