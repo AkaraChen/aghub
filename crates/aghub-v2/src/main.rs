@@ -10,7 +10,9 @@ use workspace::Workspace;
 const DESIGN_WINDOW_SIZE: gpui_kit::Size<Pixels> = size(px(882.), px(600.));
 
 fn main() {
-	let app = gpui_kit::application().with_assets(gpui_kit::assets::Assets);
+	let app = gpui_kit::application().with_assets(
+		phosphor_gpui::Assets.with_fallback(gpui_kit::assets::Assets),
+	);
 
 	app.run(move |cx| {
 		// This must be called before using any GPUI Component features.
@@ -19,7 +21,7 @@ fn main() {
 
 		let options = WindowOptions {
 			window_bounds: Some(WindowBounds::centered(DESIGN_WINDOW_SIZE, cx)),
-			..Default::default()
+			..TitleBar::window_options()
 		};
 
 		cx.spawn(async move |cx| {

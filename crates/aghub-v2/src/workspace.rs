@@ -1,8 +1,10 @@
+use gpui_kit::component::select::{Select, SelectState};
 use gpui_kit::component::sidebar::{
 	Sidebar, SidebarItem, SidebarMenu, SidebarMenuItem,
 };
 use gpui_kit::component::*;
 use gpui_kit::*;
+use phosphor_gpui::IconName as Phosphor;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
@@ -26,18 +28,19 @@ impl Page {
 		}
 	}
 
-	fn icon(self) -> IconName {
+	fn icon(self) -> phosphor_gpui::Icon {
 		match self {
-			Self::Home => IconName::LayoutDashboard,
-			Self::Plugins => IconName::Bot,
-			Self::Manage => IconName::Folder,
-			Self::Settings => IconName::Settings,
+			Self::Home => Phosphor::House.duotone(),
+			Self::Plugins => Phosphor::PuzzlePiece.duotone(),
+			Self::Manage => Phosphor::Folder.duotone(),
+			Self::Settings => Phosphor::Gear.duotone(),
 		}
 	}
 }
 
 pub struct Workspace {
 	page: Page,
+	scope: Entity<SelectState<Vec<SharedString>>>,
 	_appearance: Subscription,
 }
 
@@ -48,12 +51,46 @@ impl Workspace {
 			cx.observe_window_appearance(window, |_, window, cx| {
 				Theme::sync_system_appearance(Some(window), cx);
 			});
+		let scope = cx.new(|cx| {
+			SelectState::new(Vec::<SharedString>::new(), None, window, cx)
+		});
 		let this = Self {
 			page: Page::Home,
+			scope,
 			_appearance: appearance,
 		};
 		window.set_window_title(this.page.title());
 		this
+	}
+
+	fn render_title_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+		TitleBar::new()
+			.child(
+				div()
+					.text_sm()
+					.font_weight(FontWeight::MEDIUM)
+					.child("aghub"),
+			)
+			.child(
+				h_flex().items_center().pr_3().child(
+					h_flex()
+						.id("scope-switcher")
+						.items_center()
+						.bg(cx.theme().secondary)
+						.border_1()
+						.border_color(cx.theme().border)
+						.rounded(cx.theme().radius)
+						.hover(|this| this.bg(cx.theme().secondary_hover))
+						.child(
+							Select::new(&self.scope)
+								.xsmall()
+								.w_32()
+								.appearance(false)
+								.placeholder("Scope")
+								.accessibility_label("Scope"),
+						),
+				),
+			)
 	}
 
 	fn open_page(
@@ -124,10 +161,14 @@ impl Render for Workspace {
 		window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		h_flex()
-			.items_stretch()
-			.size_full()
-			.child(self.render_sidebar(window, cx))
-			.child(self.render_page(cx))
+		v_flex().size_full().child(self.render_title_bar(cx)).child(
+			h_flex()
+				.items_stretch()
+				.flex_1()
+				.min_h_0()
+				.w_full()
+				.child(self.render_sidebar(window, cx))
+				.child(self.render_page(cx)),
+		)
 	}
 }

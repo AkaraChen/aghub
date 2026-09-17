@@ -115,6 +115,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "gpui-kit",
+ "phosphor-gpui",
 ]
 
 [[package]]
@@ -4885,6 +4886,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57fef6bc5981e38c2ce2d63bfa546861309f875b8a75f092d1d54ae2d64f266"
 dependencies = [
  "siphasher",
+]
+
+[[package]]
+name = "phosphor-gpui"
+version = "0.1.0"
+source = "git+https://github.com/AkaraChen/phosphor-gpui?rev=630dd19a6ff6a5cd3d83c4e401444d800401ac65#630dd19a6ff6a5cd3d83c4e401444d800401ac65"
+dependencies = [
+ "anyhow",
+ "gpui-kit-assets",
+ "gpui-pre",
+ "rust-embed",
 ]
 
 [[package]]
