@@ -11,3 +11,4 @@ background = false
 on_change_strategy = "kill_then_restart"
 kill = ["pkill", "-TERM", "-P"]
 scroll_anchor = "auto"
+watch = ["themes"]

@@ -1,3 +1,4 @@
+mod theme;
 mod workspace;
 
 use gpui_kit::component::*;
@@ -14,7 +15,7 @@ fn main() {
 	app.run(move |cx| {
 		// This must be called before using any GPUI Component features.
 		gpui_kit::init(cx);
-		Theme::sync_system_appearance(None, cx);
+		theme::init(cx);
 
 		let options = WindowOptions {
 			window_bounds: Some(WindowBounds::centered(DESIGN_WINDOW_SIZE, cx)),
