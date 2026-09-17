@@ -6,3 +6,5 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.104"
 gpui-kit = "0.6.1"
+rust-i18n = "4.2"
+sys-locale = "0.3"

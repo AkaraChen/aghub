@@ -115,6 +115,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "gpui-kit",
+ "rust-i18n",
+ "sys-locale",
 ]
 
 [[package]]

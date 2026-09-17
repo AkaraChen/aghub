@@ -1,9 +1,12 @@
+mod i18n;
 mod theme;
 mod workspace;
 
 use gpui_kit::component::*;
 use gpui_kit::*;
 use workspace::Workspace;
+
+rust_i18n::i18n!("locales", fallback = "en");
 
 /// Design canvas for this app: 60% × 65% of the 15" Air logical
 /// display (1470×956 @2x). Layouts should target this size.
@@ -16,6 +19,7 @@ fn main() {
 		// This must be called before using any GPUI Component features.
 		gpui_kit::init(cx);
 		theme::init(cx);
+		i18n::init();
 
 		let options = WindowOptions {
 			window_bounds: Some(WindowBounds::centered(DESIGN_WINDOW_SIZE, cx)),
