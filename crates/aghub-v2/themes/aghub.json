@@ -8,6 +8,8 @@
 			"name": "Aghub Light",
 			"mode": "light",
 			"is_default": true,
+			"font.family": "AKR Sans SC NFM",
+			"mono_font.family": "AKR Sans SC NFM",
 			"radius": 8,
 			"radius.lg": 12,
 			"shadow": true,
@@ -157,6 +159,8 @@
 		{
 			"name": "Aghub Dark",
 			"mode": "dark",
+			"font.family": "AKR Sans SC NFM",
+			"mono_font.family": "AKR Sans SC NFM",
 			"radius": 8,
 			"radius.lg": 12,
 			"shadow": true,

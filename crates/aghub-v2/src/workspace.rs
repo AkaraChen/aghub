@@ -40,6 +40,7 @@ impl RenderOnce for PageHeader {
 					.min_w_0()
 					.flex_1()
 					.text_base()
+					.font_weight(FontWeight::MEDIUM)
 					.truncate()
 					.child(self.title),
 			)
