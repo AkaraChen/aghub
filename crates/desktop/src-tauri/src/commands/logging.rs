@@ -38,12 +38,11 @@ fn os_version() -> String {
 	#[cfg(target_os = "windows")]
 	{
 		Command::new("cmd")
-			.args(["/C", "ver"])
+			.args(["/D", "/U", "/C", "ver"])
 			.creation_flags(crate::CREATE_NO_WINDOW)
 			.output()
 			.ok()
-			.and_then(|o| String::from_utf8(o.stdout).ok())
-			.map(|s| s.trim().to_string())
+			.map(|output| decode_windows_command_output(&output.stdout))
 			.unwrap_or_default()
 	}
 	#[cfg(target_os = "linux")]
@@ -61,6 +60,20 @@ fn os_version() -> String {
 			})
 			.unwrap_or_default()
 	}
+}
+
+#[cfg(target_os = "windows")]
+fn decode_windows_command_output(bytes: &[u8]) -> String {
+	let utf16 = bytes
+		.as_chunks::<2>()
+		.0
+		.iter()
+		.map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+		.collect::<Vec<_>>();
+	String::from_utf16_lossy(&utf16)
+		.trim_start_matches('\u{feff}')
+		.trim()
+		.to_string()
 }
 
 fn log_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -415,6 +428,17 @@ mod tests {
 	fn os_version_returns_non_empty() {
 		let version = os_version();
 		assert!(!version.is_empty(), "os_version() should not be empty");
+	}
+
+	#[cfg(target_os = "windows")]
+	#[test]
+	fn decodes_unicode_windows_command_output() {
+		let expected = "Microsoft Windows [版本 10.0]";
+		let encoded = expected
+			.encode_utf16()
+			.flat_map(u16::to_le_bytes)
+			.collect::<Vec<_>>();
+		assert_eq!(decode_windows_command_output(&encoded), expected);
 	}
 
 	#[test]
