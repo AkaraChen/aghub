@@ -1,9 +1,11 @@
 use crate::fonts;
+use crate::subscribe::{self, Category};
 use gpui_kit::component::breadcrumb::{Breadcrumb, BreadcrumbItem};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::sidebar::{
 	Sidebar, SidebarItem, SidebarMenu, SidebarMenuItem,
 };
+use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -77,6 +79,7 @@ impl Page {
 
 pub struct Workspace {
 	page: Page,
+	subscribe_category: Category,
 	_appearance: Subscription,
 }
 
@@ -89,6 +92,7 @@ impl Workspace {
 			});
 		let this = Self {
 			page: Page::Subscribe,
+			subscribe_category: Category::All,
 			_appearance: appearance,
 		};
 		window.set_window_title(&this.page.title());
@@ -174,15 +178,51 @@ impl Workspace {
 		}
 	}
 
+	fn render_subscribe(&self, cx: &mut Context<Self>) -> impl IntoElement {
+		v_flex()
+			.flex_1()
+			.min_h_0()
+			.min_w_0()
+			.gap_3()
+			.child(
+				h_flex().child(
+					TabBar::new("subscribe-categories")
+						.segmented()
+						.selected_index(self.subscribe_category.index())
+						.on_click(cx.listener(|this, index, _, cx| {
+							this.subscribe_category =
+								Category::from_index(*index);
+							cx.notify();
+						}))
+						.children(Category::all().map(|category| {
+							let title = category.title();
+							Tab::new().aria_label(title.clone()).child(
+								h_flex()
+									.items_center()
+									.gap_1()
+									.child(category.icon())
+									.child(title),
+							)
+						})),
+				),
+			)
+			.child(subscribe::Grid::new(self.subscribe_category))
+	}
+
 	fn render_page(&self, cx: &mut Context<Self>) -> impl IntoElement {
 		v_flex()
 			.flex_1()
 			.min_w_0()
+			.min_h_0()
 			.h_full()
-			.bg(cx.theme().background)
+			.bg(cx.theme().tab_bar)
 			.text_color(cx.theme().foreground)
 			.p_4()
+			.gap_4()
 			.child(self.render_page_header())
+			.when(self.page == Page::Subscribe, |this| {
+				this.child(self.render_subscribe(cx))
+			})
 	}
 }
 

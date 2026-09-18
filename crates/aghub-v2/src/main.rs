@@ -1,5 +1,6 @@
 mod fonts;
 mod i18n;
+mod subscribe;
 mod theme;
 mod workspace;
 
@@ -11,9 +12,8 @@ use workspace::Workspace;
 
 rust_i18n::i18n!("locales", fallback = "en");
 
-/// Design canvas for this app: 60% × 65% of the 15" Air logical
-/// display (1470×956 @2x). Layouts should target this size.
-const DESIGN_WINDOW_SIZE: gpui_kit::Size<Pixels> = size(px(882.), px(600.));
+/// Design canvas for this app: 1.25× the previous 882×600 window.
+const DESIGN_WINDOW_SIZE: gpui_kit::Size<Pixels> = size(px(1103.), px(750.));
 
 fn main() {
 	let app = gpui_kit::application().with_assets(

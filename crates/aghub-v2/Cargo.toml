@@ -11,6 +11,8 @@ libsqlite3-sys = { version = "0.37", features = ["bundled"] }
 phosphor-gpui = { git = "https://github.com/AkaraChen/phosphor-gpui", rev = "630dd19a6ff6a5cd3d83c4e401444d800401ac65" }
 rust-i18n = "4.2"
 sea-orm = { version = "2.0.3", default-features = false, features = ["macros", "runtime-tokio", "sqlx-sqlite", "sqlite-use-returning-for-3_35"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 sea-orm-migration = { version = "2.0.3", default-features = false, features = ["runtime-tokio", "sqlx-sqlite"] }
 sys-locale = "0.3"
 thiserror = "2.0.20"

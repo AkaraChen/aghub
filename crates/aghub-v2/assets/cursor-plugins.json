@@ -1,0 +1,476 @@
+[
+  {
+    "name": "advisor",
+    "displayName": "Advisor",
+    "description": "Consult a stronger model at key checkpoints: before major decisions, when stuck on an error, and before declaring a task done. The advisor gets a full briefing plus the conversation transcript, returns guidance, and the main model keeps doing the work.",
+    "category": "developer-tools"
+  },
+  {
+    "name": "agent-compatibility",
+    "displayName": "Agent Compatibility",
+    "description": "CLI-backed repo compatibility scans plus agents that audit startup, validation, and docs against reality.",
+    "category": "developer-tools"
+  },
+  {
+    "name": "cli-for-agent",
+    "displayName": "CLI for Agents",
+    "description": "Patterns for designing CLIs that coding agents can run reliably: non-interactive flags, layered help with examples, pipelines, actionable errors, idempotency, and dry-run.",
+    "category": "developer-tools"
+  },
+  {
+    "name": "continual-learning",
+    "displayName": "Continual Learning",
+    "description": "Incrementally learns durable user preferences and workspace facts from transcript changes and keeps AGENTS.md up to date with plain bullet points.",
+    "category": "developer-tools"
+  },
+  {
+    "name": "create-plugin",
+    "displayName": "Create Plugin",
+    "description": "Scaffold and validate new agent plugins. Handles directory setup, manifest generation, and pre-submission quality checks for the marketplace.",
+    "category": "developer-tools"
+  },
+  {
+    "name": "cursor-sdk",
+    "displayName": "Cursor SDK",
+    "description": "Build apps, scripts, and automations with the TypeScript SDK.",
+    "category": "developer-tools"
+  },
+  {
+    "name": "cursor-team-kit",
+    "displayName": "Cursor Team Kit",
+    "description": "Internal engineering team workflows for CI, code review, shipping, control-cli, control-ui, verify-this, test reliability, code cleanup, and work summaries. Designed to work without requiring third-party service integrations.",
+    "category": "developer-tools"
+  },
+  {
+    "name": "docs-canvas",
+    "displayName": "Docs Canvas",
+    "description": "Render documentation as a navigable canvas.",
+    "category": "developer-tools"
+  },
+  {
+    "name": "grok-voice",
+    "displayName": "Grok Voice",
+    "description": "Add Grok voice to an app: realtime speech-to-speech, speech-to-text dictation, text-to-speech read-aloud, and a log-driven fix loop for voice sessions.",
+    "category": "developer-tools"
+  },
+  {
+    "name": "orchestrate",
+    "displayName": "Orchestrate",
+    "description": "Fan a large task out across parallel cloud agents via the Cursor SDK: planners publish tasks, workers hand off back up, and a script reconciles the tree from disk and git.",
+    "category": "developer-tools"
+  },
+  {
+    "name": "pr-review-canvas",
+    "displayName": "PR Review Canvas",
+    "description": "Render PR diffs as review canvases grouped by importance.",
+    "category": "developer-tools"
+  },
+  {
+    "name": "pstack",
+    "displayName": "pstack",
+    "description": "if you want to go fast, go deep first. pstack helps you write less, but higher quality code. rigorous agent workflows you can parallelize with confidence.",
+    "category": "developer-tools"
+  },
+  {
+    "name": "ralph-loop",
+    "displayName": "Ralph Loop",
+    "description": "Continuous self-referential AI loops for iterative development, implementing the Ralph Wiggum technique. Run the agent in a while-true loop with the same prompt until task completion.",
+    "category": "developer-tools"
+  },
+  {
+    "name": "teaching",
+    "displayName": "Teaching",
+    "description": "Skill mapping, practice plans, and learning retrospectives. Builds personalized roadmaps with milestones and practice checkpoints, and runs periodic reviews to adjust based on progress.",
+    "category": "utilities"
+  },
+  {
+    "name": "thermos",
+    "displayName": "Thermos",
+    "description": "Thermo-nuclear branch review: deep correctness and security audits plus harsh code-quality rubrics, parallel subagents, thermos orchestration, and optional take-the-wheel and FSD merge-ready flows.",
+    "category": "developer-tools"
+  },
+  {
+    "name": "ahrefs",
+    "displayName": "Ahrefs",
+    "description": "Research keywords, backlinks, rankings, and site health.",
+    "category": "integrations"
+  },
+  {
+    "name": "amplemarket",
+    "displayName": "Amplemarket",
+    "description": "Search people and companies, enrich leads, run sequences.",
+    "category": "integrations"
+  },
+  {
+    "name": "ashby",
+    "displayName": "Ashby",
+    "description": "Search candidates, prep interviews, and manage pipeline tasks.",
+    "category": "integrations"
+  },
+  {
+    "name": "attio",
+    "displayName": "Attio",
+    "description": "Search and update CRM records, lists, notes, and tasks.",
+    "category": "integrations"
+  },
+  {
+    "name": "brevo",
+    "displayName": "Brevo",
+    "description": "Manage contacts, email and SMS campaigns, and CRM deals.",
+    "category": "integrations"
+  },
+  {
+    "name": "brex",
+    "displayName": "Brex",
+    "description": "Query expenses, receipts, bills, cards, and travel.",
+    "category": "integrations"
+  },
+  {
+    "name": "calendly",
+    "displayName": "Calendly",
+    "description": "Check availability and book, cancel, or reschedule.",
+    "category": "integrations"
+  },
+  {
+    "name": "circleback",
+    "displayName": "Circleback",
+    "description": "Search meetings, transcripts, action items, and emails.",
+    "category": "integrations"
+  },
+  {
+    "name": "clay",
+    "displayName": "Clay",
+    "description": "Enrich people and companies, run AI research agents.",
+    "category": "integrations"
+  },
+  {
+    "name": "coda",
+    "displayName": "Coda",
+    "description": "Search docs, read pages, and update tables.",
+    "category": "integrations"
+  },
+  {
+    "name": "craft",
+    "displayName": "Craft",
+    "description": "Search, create, and update documents and daily notes.",
+    "category": "integrations"
+  },
+  {
+    "name": "customer-io",
+    "displayName": "Customer.io",
+    "description": "Build campaigns, manage segments, and query people.",
+    "category": "integrations"
+  },
+  {
+    "name": "daloopa",
+    "displayName": "Daloopa",
+    "description": "Pull source-linked fundamentals, KPIs, filings, and prices.",
+    "category": "integrations"
+  },
+  {
+    "name": "docusign",
+    "displayName": "Docusign",
+    "description": "Manage envelopes, templates, workflows, and agreements.",
+    "category": "integrations"
+  },
+  {
+    "name": "excalidraw",
+    "displayName": "Excalidraw",
+    "description": "Draw and export hand-drawn diagrams from chat.",
+    "category": "integrations"
+  },
+  {
+    "name": "fathom",
+    "displayName": "Fathom",
+    "description": "Search meetings and pull transcripts and summaries.",
+    "category": "integrations"
+  },
+  {
+    "name": "finance",
+    "displayName": "Finance",
+    "description": "Securely connect your accounts so Grok can help with questions about your spending, subscriptions, balances, and investments.",
+    "category": "integrations"
+  },
+  {
+    "name": "fireflies",
+    "displayName": "Fireflies",
+    "description": "Search meeting transcripts, summaries, and action items.",
+    "category": "integrations"
+  },
+  {
+    "name": "gamma",
+    "displayName": "Gamma",
+    "description": "Generate presentations, documents, and webpages.",
+    "category": "integrations"
+  },
+  {
+    "name": "github",
+    "displayName": "GitHub",
+    "description": "Manage repos, issues, pull requests, and Actions.",
+    "category": "integrations"
+  },
+  {
+    "name": "gmail",
+    "displayName": "Gmail",
+    "description": "Search, read, draft, and manage email.",
+    "category": "productivity"
+  },
+  {
+    "name": "godaddy",
+    "displayName": "GoDaddy",
+    "description": "Brainstorm domain names and check availability.",
+    "category": "integrations"
+  },
+  {
+    "name": "gong",
+    "displayName": "Gong",
+    "description": "Pull account summaries, deal insights, and call briefs.",
+    "category": "integrations"
+  },
+  {
+    "name": "google-calendar",
+    "displayName": "Google Calendar",
+    "description": "Search events and schedule meetings.",
+    "category": "productivity"
+  },
+  {
+    "name": "google-cloud-bigquery",
+    "displayName": "Google Cloud BigQuery",
+    "description": "Explore datasets and tables and run SQL queries.",
+    "category": "integrations"
+  },
+  {
+    "name": "google-drive",
+    "displayName": "Google Drive",
+    "description": "Search, read, create, and share files.",
+    "category": "productivity"
+  },
+  {
+    "name": "guru",
+    "displayName": "Guru",
+    "description": "Search company knowledge and draft verified answers.",
+    "category": "integrations"
+  },
+  {
+    "name": "hubspot",
+    "displayName": "HubSpot",
+    "description": "Search and update contacts, companies, deals, and tickets.",
+    "category": "integrations"
+  },
+  {
+    "name": "hunter",
+    "displayName": "Hunter",
+    "description": "Find and verify emails, discover companies, and save leads.",
+    "category": "integrations"
+  },
+  {
+    "name": "interactive-brokers",
+    "displayName": "Interactive Brokers",
+    "description": "Review positions, balances, P&L, and draft trade instructions.",
+    "category": "integrations"
+  },
+  {
+    "name": "intercom",
+    "displayName": "Intercom",
+    "description": "Search conversations, contacts, and Help Center articles.",
+    "category": "integrations"
+  },
+  {
+    "name": "jotform",
+    "displayName": "Jotform",
+    "description": "Create and edit forms, then read submissions.",
+    "category": "integrations"
+  },
+  {
+    "name": "juicebox",
+    "displayName": "Juicebox",
+    "description": "Query recruiting analytics, shortlists, and sourcing agents.",
+    "category": "integrations"
+  },
+  {
+    "name": "klaviyo",
+    "displayName": "Klaviyo",
+    "description": "Manage profiles, segments, campaigns, and flows.",
+    "category": "integrations"
+  },
+  {
+    "name": "mailerlite",
+    "displayName": "MailerLite",
+    "description": "Manage subscribers, groups, campaigns, and automations.",
+    "category": "integrations"
+  },
+  {
+    "name": "meltwater",
+    "displayName": "Meltwater",
+    "description": "Search media and social mentions and pull analytics.",
+    "category": "integrations"
+  },
+  {
+    "name": "mem",
+    "displayName": "Mem",
+    "description": "Capture, search, and organize notes and collections.",
+    "category": "integrations"
+  },
+  {
+    "name": "mercury",
+    "displayName": "Mercury",
+    "description": "Read balances, transactions, statements, and cards.",
+    "category": "integrations"
+  },
+  {
+    "name": "navan",
+    "displayName": "Navan",
+    "description": "Query expenses, travel bookings, policies, and cards.",
+    "category": "integrations"
+  },
+  {
+    "name": "onedrive",
+    "displayName": "OneDrive",
+    "description": "Browse, search, and read Microsoft OneDrive files.",
+    "category": "productivity"
+  },
+  {
+    "name": "otter",
+    "displayName": "Otter.ai",
+    "description": "Search meeting history and pull full transcripts.",
+    "category": "integrations"
+  },
+  {
+    "name": "outlook",
+    "displayName": "Outlook",
+    "description": "Search, read, and send Microsoft Outlook email, and look up contacts.",
+    "category": "productivity"
+  },
+  {
+    "name": "outlook-calendar",
+    "displayName": "Outlook Calendar",
+    "description": "List, create, update, and cancel Microsoft Outlook calendar events.",
+    "category": "productivity"
+  },
+  {
+    "name": "outreach",
+    "displayName": "Outreach",
+    "description": "Search sequences, prospects, and Kaia meetings.",
+    "category": "integrations"
+  },
+  {
+    "name": "playwright",
+    "displayName": "Playwright",
+    "description": "Navigate, click, screenshot, and test in a real browser.",
+    "category": "integrations"
+  },
+  {
+    "name": "profound",
+    "displayName": "Profound",
+    "description": "Track AI visibility, sentiment, and citations.",
+    "category": "integrations"
+  },
+  {
+    "name": "readwise",
+    "displayName": "Readwise",
+    "description": "Search highlights and Reader documents, save articles.",
+    "category": "integrations"
+  },
+  {
+    "name": "salesforce",
+    "displayName": "Salesforce",
+    "description": "Query, create, and update records in your org.",
+    "category": "integrations"
+  },
+  {
+    "name": "semrush",
+    "displayName": "Semrush",
+    "description": "Research keywords, backlinks, traffic, and competitors.",
+    "category": "integrations"
+  },
+  {
+    "name": "sharepoint",
+    "displayName": "SharePoint",
+    "description": "Search and read Microsoft SharePoint sites, document libraries, files, and lists.",
+    "category": "productivity"
+  },
+  {
+    "name": "similarweb",
+    "displayName": "Similarweb",
+    "description": "Analyze website traffic, audiences, and competitors.",
+    "category": "integrations"
+  },
+  {
+    "name": "smartsheet",
+    "displayName": "Smartsheet",
+    "description": "Query and update sheets, rows, and workspaces.",
+    "category": "integrations"
+  },
+  {
+    "name": "sp-global",
+    "displayName": "S&P Global",
+    "description": "Query S&P Capital IQ financials, prices, and transcripts.",
+    "category": "integrations"
+  },
+  {
+    "name": "teams",
+    "displayName": "Teams",
+    "description": "Search, read, and send Microsoft Teams chats and channel messages.",
+    "category": "productivity"
+  },
+  {
+    "name": "todoist",
+    "displayName": "Todoist",
+    "description": "Create, find, and complete tasks and projects.",
+    "category": "integrations"
+  },
+  {
+    "name": "typeform",
+    "displayName": "Typeform",
+    "description": "Build forms, analyze responses, and manage contacts.",
+    "category": "integrations"
+  },
+  {
+    "name": "upwork",
+    "displayName": "Upwork",
+    "description": "Search talent, post jobs, and manage contracts.",
+    "category": "integrations"
+  },
+  {
+    "name": "webull",
+    "displayName": "Webull",
+    "description": "View accounts, positions, orders, watchlists, and market data.",
+    "category": "integrations"
+  },
+  {
+    "name": "workable",
+    "displayName": "Workable",
+    "description": "Search candidates, move pipelines, and manage HR records.",
+    "category": "integrations"
+  },
+  {
+    "name": "wrike",
+    "displayName": "Wrike",
+    "description": "Search projects, create tasks, and post comments.",
+    "category": "integrations"
+  },
+  {
+    "name": "x",
+    "displayName": "X",
+    "description": "Search posts, read timelines, pull trends, manage bookmarks, and access X Chat.",
+    "category": "integrations"
+  },
+  {
+    "name": "x-ads",
+    "displayName": "X Ads",
+    "description": "Manage ad campaigns, create ads, track conversions, and pull performance stats.",
+    "category": "integrations"
+  },
+  {
+    "name": "xero",
+    "displayName": "Xero",
+    "description": "Read and write invoices, contacts, reports, and payroll.",
+    "category": "integrations"
+  },
+  {
+    "name": "zoom",
+    "displayName": "Zoom",
+    "description": "Search meetings, pull transcripts, and work with Zoom Docs.",
+    "category": "integrations"
+  }
+]
