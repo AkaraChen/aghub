@@ -18,7 +18,7 @@ pub mod runtime;
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::future::Future;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use futures::stream::{self, StreamExt};
@@ -162,7 +162,8 @@ async fn run_ccusage_with_limits(
 	stdout_limit: usize,
 	stderr_limit: usize,
 ) -> Result<Vec<u8>, String> {
-	let mut cmd = tokio::process::Command::new(bin);
+	let mut cmd = runtime::process::command_for(Path::new(bin))
+		.map_err(|error| format!("failed to prepare ccusage: {error}"))?;
 	cmd.args(&args);
 	let output = match runtime::process::run_bounded(
 		&mut cmd,
