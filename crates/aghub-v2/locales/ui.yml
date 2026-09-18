@@ -36,6 +36,18 @@ subscribe:
   empty:
     en: Nothing in this category yet
     zh-CN: 这一类还没有内容
+  created_by:
+    en: Created by %{name}
+    zh-CN: 由 %{name} 创建
+  view_source:
+    en: View source
+    zh-CN: 查看源码
+  skills:
+    en: Skills
+    zh-CN: 技能
+  mcp:
+    en: MCP
+    zh-CN: MCP
 scope:
   global:
     en: Global

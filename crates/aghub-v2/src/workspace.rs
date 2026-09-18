@@ -80,6 +80,7 @@ impl Page {
 pub struct Workspace {
 	page: Page,
 	subscribe_category: Category,
+	subscribe_plugin: Option<SharedString>,
 	_appearance: Subscription,
 }
 
@@ -93,6 +94,7 @@ impl Workspace {
 		let this = Self {
 			page: Page::Subscribe,
 			subscribe_category: Category::All,
+			subscribe_plugin: None,
 			_appearance: appearance,
 		};
 		window.set_window_title(&this.page.title());
@@ -114,12 +116,46 @@ impl Workspace {
 		window: &mut Window,
 		cx: &mut Context<Self>,
 	) {
-		if self.page == page {
+		if self.page == page && self.subscribe_plugin.is_none() {
 			return;
 		}
 		self.page = page;
+		self.subscribe_plugin = None;
 		window.set_window_title(&page.title());
 		cx.notify();
+	}
+
+	fn open_plugin(
+		&mut self,
+		id: SharedString,
+		window: &mut Window,
+		cx: &mut Context<Self>,
+	) {
+		if self.subscribe_plugin.as_ref() == Some(&id) {
+			return;
+		}
+		self.page = Page::Subscribe;
+		let title = subscribe::item(&id)
+			.map(|item| item.name().to_string())
+			.unwrap_or_else(|| Page::Subscribe.title());
+		self.subscribe_plugin = Some(id);
+		window.set_window_title(&title);
+		cx.notify();
+	}
+
+	fn close_plugin(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+		if self.subscribe_plugin.is_none() {
+			return;
+		}
+		self.subscribe_plugin = None;
+		window.set_window_title(&Page::Subscribe.title());
+		cx.notify();
+	}
+
+	fn subscribe_item(&self) -> Option<&'static subscribe::Item> {
+		self.subscribe_plugin
+			.as_ref()
+			.and_then(|id| subscribe::item(id))
 	}
 
 	fn menu_item(
@@ -168,17 +204,27 @@ impl Workspace {
 			.accessibility_label(refresh)
 	}
 
-	fn render_page_header(&self) -> impl IntoElement {
-		let header = PageHeader::new([self.page.title()]);
-		match self.page {
-			Page::Subscribe => {
-				header.trailing(Self::subscribe_refresh_button())
-			}
-			_ => header,
+	fn render_page_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
+		match (self.page, self.subscribe_item()) {
+			(Page::Subscribe, Some(item)) => PageHeader::new([
+				BreadcrumbItem::new(Page::Subscribe.title()).on_click(
+					cx.listener(|this, _, window, cx| {
+						this.close_plugin(window, cx);
+					}),
+				),
+				BreadcrumbItem::new(item.category().title()),
+			]),
+			(Page::Subscribe, None) => PageHeader::new([self.page.title()])
+				.trailing(Self::subscribe_refresh_button()),
+			_ => PageHeader::new([self.page.title()]),
 		}
 	}
 
 	fn render_subscribe(&self, cx: &mut Context<Self>) -> impl IntoElement {
+		if let Some(item) = self.subscribe_item() {
+			return subscribe::Detail::new(item.clone()).into_any_element();
+		}
+
 		v_flex()
 			.flex_1()
 			.min_h_0()
@@ -206,7 +252,12 @@ impl Workspace {
 						})),
 				),
 			)
-			.child(subscribe::Grid::new(self.subscribe_category))
+			.child(subscribe::Grid::new(self.subscribe_category).on_open(
+				cx.listener(|this, id: &SharedString, window, cx| {
+					this.open_plugin(id.clone(), window, cx);
+				}),
+			))
+			.into_any_element()
 	}
 
 	fn render_page(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -219,7 +270,7 @@ impl Workspace {
 			.text_color(cx.theme().foreground)
 			.p_4()
 			.gap_4()
-			.child(self.render_page_header())
+			.child(self.render_page_header(cx))
 			.when(self.page == Page::Subscribe, |this| {
 				this.child(self.render_subscribe(cx))
 			})
