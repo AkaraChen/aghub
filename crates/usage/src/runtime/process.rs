@@ -1,3 +1,8 @@
+#[cfg(target_os = "windows")]
+use std::ffi::OsString;
+use std::path::Path;
+#[cfg(target_os = "windows")]
+use std::path::PathBuf;
 use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
@@ -22,6 +27,48 @@ pub(crate) enum BoundedProcessError {
 	Spawn(std::io::Error),
 	Read(std::io::Error),
 	TimedOut,
+}
+
+/// Builds the command that executes `path` on the current platform.
+///
+/// Unix launches JS entry points through their shebang; Windows has no
+/// equivalent, so `.js`/`.mjs`/`.cjs` paths must run through `node`
+/// explicitly.
+pub(crate) fn command_for(path: &Path) -> std::io::Result<Command> {
+	#[cfg(target_os = "windows")]
+	if is_node_script(path) {
+		let (program, script) = node_script_runner(path)?;
+		let mut command = Command::new(program);
+		command.arg(script);
+		return Ok(command);
+	}
+	Ok(Command::new(path))
+}
+
+#[cfg(target_os = "windows")]
+fn is_node_script(path: &Path) -> bool {
+	path.extension()
+		.and_then(|extension| extension.to_str())
+		.is_some_and(|extension| {
+			matches!(
+				extension.to_ascii_lowercase().as_str(),
+				"js" | "mjs" | "cjs"
+			)
+		})
+}
+
+#[cfg(target_os = "windows")]
+fn node_script_runner(path: &Path) -> std::io::Result<(PathBuf, OsString)> {
+	let node = which::which("node").map_err(|error| {
+		std::io::Error::new(
+			std::io::ErrorKind::NotFound,
+			format!(
+				"cannot execute JavaScript ccusage entry point: node was not \
+				 found: {error}"
+			),
+		)
+	})?;
+	Ok((node, path.as_os_str().to_owned()))
 }
 
 pub(crate) async fn run_bounded(
@@ -243,5 +290,82 @@ mod tests {
 		write.await.unwrap();
 		assert_eq!(captured.bytes.len(), 128);
 		assert!(captured.truncated);
+	}
+
+	#[test]
+	fn command_for_runs_extensionless_paths_directly() {
+		let command = command_for(Path::new("ccusage")).unwrap();
+		assert_eq!(command.as_std().get_program(), "ccusage");
+		assert_eq!(command.as_std().get_args().count(), 0);
+	}
+
+	#[cfg(target_os = "windows")]
+	#[test]
+	fn command_for_runs_js_scripts_through_node() {
+		let dir = tempfile::tempdir().unwrap();
+		for name in ["probe.mjs", "probe.JS"] {
+			let script = dir.path().join(name);
+			std::fs::write(&script, "console.log('ok')").unwrap();
+			let command = command_for(&script).unwrap();
+			let standard = command.as_std();
+			assert!(
+				standard
+					.get_program()
+					.to_string_lossy()
+					.to_lowercase()
+					.contains("node"),
+				"expected node to launch {name}"
+			);
+			assert_eq!(
+				standard.get_args().collect::<Vec<_>>(),
+				[script.as_os_str()]
+			);
+		}
+	}
+
+	#[cfg(target_os = "windows")]
+	#[tokio::test]
+	async fn command_for_executes_js_scripts_with_spaces_in_path() {
+		let dir = tempfile::Builder::new()
+			.prefix("ccusage script test ")
+			.tempdir()
+			.unwrap();
+		for name in ["probe script.js", "probe script.mjs", "probe script.cjs"]
+		{
+			let script = dir.path().join(name);
+			std::fs::write(
+				&script,
+				"console.log(JSON.stringify(process.argv.slice(2)));",
+			)
+			.unwrap();
+			let mut command = command_for(&script).unwrap();
+			command.args(["--version", "argument with spaces"]);
+			let output =
+				run_bounded(&mut command, Duration::from_secs(10), 4096, 4096)
+					.await
+					.unwrap_or_else(|_| panic!("failed to execute {name}"));
+			assert!(
+				output.status.success(),
+				"{name}: {}",
+				String::from_utf8_lossy(&output.stderr.bytes)
+			);
+			assert_eq!(
+				String::from_utf8(output.stdout.bytes).unwrap().trim(),
+				r#"["--version","argument with spaces"]"#
+			);
+			assert!(output.stderr.bytes.is_empty());
+			assert!(!output.stdout.truncated);
+			assert!(!output.stderr.truncated);
+		}
+	}
+
+	#[cfg(target_os = "windows")]
+	#[test]
+	fn command_for_runs_command_scripts_directly() {
+		// `.cmd`/`.bat` shims resolve to their native binary earlier in
+		// discovery; command_for must not intercept them.
+		let shim = Path::new(r"C:\bin\ccusage.cmd");
+		let command = command_for(shim).unwrap();
+		assert_eq!(command.as_std().get_program(), shim);
 	}
 }

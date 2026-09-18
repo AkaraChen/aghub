@@ -228,7 +228,12 @@ async fn probe_version_with_timeout(
 	path: &Path,
 	timeout: Duration,
 ) -> Result<Version, CcusageRuntimeError> {
-	let mut command = tokio::process::Command::new(path);
+	let mut command = super::process::command_for(path).map_err(|error| {
+		CcusageRuntimeError::Spawn {
+			path: path.to_path_buf(),
+			error,
+		}
+	})?;
 	command.arg("--version");
 	let output = match super::process::run_bounded(
 		&mut command,
