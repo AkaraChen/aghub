@@ -1,5 +1,6 @@
 mod fonts;
 mod i18n;
+mod installed;
 mod subscribe;
 mod theme;
 mod workspace;

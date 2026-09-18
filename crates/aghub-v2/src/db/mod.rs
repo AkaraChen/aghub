@@ -10,6 +10,7 @@ use sea_orm::{
 use sea_orm_migration::{MigrationTrait, MigratorTrait, async_trait};
 
 mod m20260918_000001_create_project;
+mod m20260918_000002_create_plugin;
 
 const DATABASE_FILE: &str = "aghub.db";
 
@@ -87,7 +88,10 @@ pub struct Migrator;
 #[async_trait::async_trait]
 impl MigratorTrait for Migrator {
 	fn migrations() -> Vec<Box<dyn MigrationTrait>> {
-		vec![Box::new(m20260918_000001_create_project::Migration)]
+		vec![
+			Box::new(m20260918_000001_create_project::Migration),
+			Box::new(m20260918_000002_create_plugin::Migration),
+		]
 	}
 }
 
@@ -190,5 +194,17 @@ mod tests {
 		db.execute_unprepared("SELECT id, name, path FROM projects LIMIT 0")
 			.await
 			.unwrap();
+	}
+
+	#[tokio::test]
+	async fn connect_and_setup_creates_plugins_table() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("aghub.db");
+		let db = connect_and_setup(&path).await.unwrap();
+		db.execute_unprepared(
+			"SELECT id, name, description FROM plugins LIMIT 0",
+		)
+		.await
+		.unwrap();
 	}
 }

@@ -16,7 +16,7 @@ type OpenPlugin = Rc<dyn Fn(&SharedString, &mut Window, &mut App)>;
 
 const CURSOR_ORG_PNG: &[u8] = include_bytes!("../../assets/cursor-org.png");
 
-fn cursor_org_icon(size: f32) -> impl IntoElement {
+pub(crate) fn cursor_org_icon(size: f32) -> impl IntoElement {
 	static IMAGE: OnceLock<Arc<Image>> = OnceLock::new();
 	let image = IMAGE
 		.get_or_init(|| {

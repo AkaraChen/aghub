@@ -1,5 +1,9 @@
 use crate::fonts;
+use crate::installed;
 use crate::subscribe::{self, Category};
+use aghub::db::{self, AppDb};
+use aghub::plugin::{self, InstallPlugin, Plugin};
+use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::breadcrumb::{Breadcrumb, BreadcrumbItem};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
@@ -83,6 +87,8 @@ pub struct Workspace {
 	subscribe_category: Category,
 	subscribe_plugin: Option<SharedString>,
 	subscribe_search: Entity<InputState>,
+	installed: Vec<Plugin>,
+	installing: Option<SharedString>,
 	_appearance: Subscription,
 	_search: Subscription,
 }
@@ -104,14 +110,17 @@ impl Workspace {
 					cx.notify();
 				}
 			});
-		let this = Self {
+		let mut this = Self {
 			page: Page::Subscribe,
 			subscribe_category: Category::All,
 			subscribe_plugin: None,
 			subscribe_search,
+			installed: Vec::new(),
+			installing: None,
 			_appearance: appearance,
 			_search: search,
 		};
+		this.reload_installed(cx);
 		window.set_window_title(&this.page.title());
 		this
 	}
@@ -173,6 +182,77 @@ impl Workspace {
 			.and_then(|id| subscribe::item(id))
 	}
 
+	fn is_installed(&self, id: &str) -> bool {
+		self.installed.iter().any(|plugin| plugin.id == id)
+	}
+
+	fn reload_installed(&mut self, cx: &mut Context<Self>) {
+		let conn = cx.global::<AppDb>().conn().clone();
+		cx.spawn(async move |this, cx| {
+			let listed =
+				db::Tokio::spawn(cx, async move { plugin::list(&conn).await })
+					.await;
+			this.update(cx, |this, cx| {
+				if let Ok(Ok(plugins)) = listed {
+					this.installed = plugins;
+					cx.notify();
+				}
+			})
+			.ok();
+		})
+		.detach();
+	}
+
+	fn install_current_plugin(
+		&mut self,
+		window: &mut Window,
+		cx: &mut Context<Self>,
+	) {
+		let Some(item) = self.subscribe_item() else {
+			return;
+		};
+		let id = item.id().clone();
+		if self.is_installed(&id) || self.installing.is_some() {
+			return;
+		}
+		self.installing = Some(id.clone());
+		cx.notify();
+		let input = InstallPlugin {
+			id: id.to_string(),
+			name: item.name().to_string(),
+			description: item.description().to_string(),
+		};
+		let conn = cx.global::<AppDb>().conn().clone();
+		cx.spawn_in(window, async move |this, cx| {
+			let result = db::Tokio::spawn(cx, async move {
+				plugin::install(&conn, input).await
+			})
+			.await;
+			this.update_in(cx, |this, window, cx| {
+				this.installing = None;
+				match result {
+					Ok(Ok(plugin)) => {
+						if !this.is_installed(&plugin.id) {
+							this.installed.push(plugin);
+							this.installed.sort_by(|a, b| {
+								a.name.cmp(&b.name).then(a.id.cmp(&b.id))
+							});
+						}
+					}
+					_ => {
+						window.push_notification(
+							t!("plugins.install_failed").into_owned(),
+							cx,
+						);
+					}
+				}
+				cx.notify();
+			})
+			.ok();
+		})
+		.detach();
+	}
+
 	fn menu_item(
 		page: Page,
 		current: Page,
@@ -221,14 +301,38 @@ impl Workspace {
 
 	fn render_page_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
 		match (self.page, self.subscribe_item()) {
-			(Page::Subscribe, Some(item)) => PageHeader::new([
-				BreadcrumbItem::new(Page::Subscribe.title()).on_click(
-					cx.listener(|this, _, window, cx| {
-						this.close_plugin(window, cx);
-					}),
-				),
-				BreadcrumbItem::new(item.category().title()),
-			]),
+			(Page::Subscribe, Some(item)) => {
+				let id = item.id().as_ref();
+				let installed = self.is_installed(id);
+				let installing = self
+					.installing
+					.as_ref()
+					.is_some_and(|current| current == id);
+				let label = if installed {
+					t!("action.installed")
+				} else {
+					t!("action.install")
+				};
+				PageHeader::new([
+					BreadcrumbItem::new(Page::Subscribe.title()).on_click(
+						cx.listener(|this, _, window, cx| {
+							this.close_plugin(window, cx);
+						}),
+					),
+					BreadcrumbItem::new(item.category().title()),
+				])
+				.trailing(
+					Button::new("install-plugin")
+						.small()
+						.label(label)
+						.disabled(installed || installing)
+						.loading(installing)
+						.when(!installed, |this| this.primary())
+						.on_click(cx.listener(|this, _, window, cx| {
+							this.install_current_plugin(window, cx);
+						})),
+				)
+			}
 			(Page::Subscribe, None) => PageHeader::new([self.page.title()])
 				.trailing(Self::subscribe_refresh_button()),
 			_ => PageHeader::new([self.page.title()]),
@@ -290,6 +394,14 @@ impl Workspace {
 			.into_any_element()
 	}
 
+	fn render_plugins(&self, cx: &mut Context<Self>) -> impl IntoElement {
+		installed::Grid::new(self.installed.clone()).on_open(cx.listener(
+			|this, id: &SharedString, window, cx| {
+				this.open_plugin(id.clone(), window, cx);
+			},
+		))
+	}
+
 	fn render_page(&self, cx: &mut Context<Self>) -> impl IntoElement {
 		v_flex()
 			.flex_1()
@@ -303,6 +415,9 @@ impl Workspace {
 			.child(self.render_page_header(cx))
 			.when(self.page == Page::Subscribe, |this| {
 				this.child(self.render_subscribe(cx))
+			})
+			.when(self.page == Page::Plugins, |this| {
+				this.child(self.render_plugins(cx))
 			})
 	}
 }

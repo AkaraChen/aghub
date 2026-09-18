@@ -151,6 +151,10 @@ pub fn item(id: impl AsRef<str>) -> Option<&'static Item> {
 }
 
 impl Item {
+	pub fn id(&self) -> &SharedString {
+		&self.id
+	}
+
 	pub fn name(&self) -> &SharedString {
 		&self.name
 	}

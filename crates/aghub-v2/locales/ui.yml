@@ -16,6 +16,12 @@ action:
   refresh:
     en: Refresh
     zh-CN: 刷新
+  install:
+    en: Install
+    zh-CN: 安装
+  installed:
+    en: Installed
+    zh-CN: 已安装
 subscribe:
   category:
     all:
@@ -54,6 +60,13 @@ subscribe:
   mcp:
     en: MCP
     zh-CN: MCP
+plugins:
+  empty:
+    en: No plugins installed yet
+    zh-CN: 还没有安装插件
+  install_failed:
+    en: Couldn't install this plugin
+    zh-CN: 无法安装这个插件
 scope:
   global:
     en: Global
