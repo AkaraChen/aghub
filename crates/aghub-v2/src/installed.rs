@@ -1,24 +1,26 @@
 use aghub::plugin::Plugin;
+use gpui_kit::component::avatar::Avatar;
 use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use rust_i18n::t;
 use std::rc::Rc;
 
-use crate::subscribe;
+use crate::marketplace::Catalog;
 
 type OpenPlugin = Rc<dyn Fn(&SharedString, &mut Window, &mut App)>;
 
 #[derive(IntoElement)]
 struct Card {
 	plugin: Plugin,
+	openable: bool,
 	on_open: Option<OpenPlugin>,
 }
 
 impl RenderOnce for Card {
 	fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
 		let id: SharedString = self.plugin.id.clone().into();
-		let openable = subscribe::item(&id).is_some();
+		let openable = self.openable;
 		v_flex()
 			.id(id.clone())
 			.w_full()
@@ -43,7 +45,7 @@ impl RenderOnce for Card {
 				h_flex()
 					.min_w_0()
 					.gap_1()
-					.child(subscribe::cursor_org_icon(0.875))
+					.child(Avatar::new().name(self.plugin.name.clone()).small())
 					.child(
 						div()
 							.min_w_0()
@@ -71,6 +73,7 @@ impl RenderOnce for Card {
 #[derive(IntoElement)]
 pub struct Grid {
 	plugins: Vec<Plugin>,
+	catalog: Option<Entity<Catalog>>,
 	on_open: Option<OpenPlugin>,
 }
 
@@ -78,8 +81,14 @@ impl Grid {
 	pub fn new(plugins: Vec<Plugin>) -> Self {
 		Self {
 			plugins,
+			catalog: None,
 			on_open: None,
 		}
+	}
+
+	pub fn catalog(mut self, catalog: Entity<Catalog>) -> Self {
+		self.catalog = Some(catalog);
+		self
 	}
 
 	pub fn on_open(
@@ -93,6 +102,7 @@ impl Grid {
 
 impl RenderOnce for Grid {
 	fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+		let catalog = self.catalog.as_ref().map(|catalog| catalog.read(cx));
 		div()
 			.id("installed-plugins")
 			.flex_1()
@@ -112,6 +122,9 @@ impl RenderOnce for Grid {
 			.when(!self.plugins.is_empty(), |this| {
 				this.child(div().w_full().grid().grid_cols(2).gap_3().children(
 					self.plugins.into_iter().map(|plugin| Card {
+						openable: catalog.as_ref().is_some_and(|catalog| {
+							catalog.find(&plugin.id).is_some()
+						}),
 						plugin,
 						on_open: self.on_open.clone(),
 					}),

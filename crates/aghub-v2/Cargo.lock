@@ -115,8 +115,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "directories",
+ "futures",
  "gpui-kit",
  "libsqlite3-sys",
+ "nyquest",
+ "nyquest-backend-nsurlsession",
  "phosphor-gpui",
  "rust-i18n",
  "sea-orm",
@@ -4819,6 +4822,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "nyquest"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c54715182b0e7fb868e03ca248e7ce988db1c3539448e2e89172e464c46fc63d"
+dependencies = [
+ "nyquest-interface",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "nyquest-backend-nsurlsession"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "737f41a546c5fef3466f809bfb44ec2bbef6bd01ba39214bf8ffc1f331452e07"
+dependencies = [
+ "arc-swap",
+ "block2 0.6.2",
+ "cfg-if",
+ "futures-util",
+ "nyquest-interface",
+ "objc2 0.6.4",
+ "objc2-core-foundation",
+ "objc2-foundation 0.3.2",
+ "objc2-security",
+]
+
+[[package]]
+name = "nyquest-interface"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb05f2ed2f66e1ebe9135ebac41d17e00588841502c4fad99ed57476c13147ca"
+dependencies = [
+ "cfg-if",
+ "futures-core",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "objc"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5118,6 +5159,17 @@ dependencies = [
  "objc2 0.6.4",
  "objc2-core-graphics",
  "objc2-foundation 0.3.2",
+]
+
+[[package]]
+name = "objc2-security"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "709fe137109bd1e8b5a99390f77a7d8b2961dafc1a1c5db8f2e60329ad6d895a"
+dependencies = [
+ "bitflags 2.13.2",
+ "objc2 0.6.4",
+ "objc2-core-foundation",
 ]
 
 [[package]]

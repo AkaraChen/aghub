@@ -1,7 +1,8 @@
 mod fonts;
+mod http;
 mod i18n;
 mod installed;
-mod subscribe;
+mod marketplace;
 mod theme;
 mod workspace;
 
@@ -17,9 +18,12 @@ rust_i18n::i18n!("locales", fallback = "en");
 const DESIGN_WINDOW_SIZE: gpui_kit::Size<Pixels> = size(px(1103.), px(750.));
 
 fn main() {
-	let app = gpui_kit::application().with_assets(
-		phosphor_gpui::Assets.with_fallback(gpui_kit::assets::Assets),
-	);
+	http::register_backend();
+	let app = gpui_kit::application()
+		.with_http_client(http::client())
+		.with_assets(
+			phosphor_gpui::Assets.with_fallback(gpui_kit::assets::Assets),
+		);
 
 	app.run(move |cx| {
 		// This must be called before using any GPUI Component features.

@@ -13,6 +13,11 @@ rust-i18n = "4.2"
 sea-orm = { version = "2.0.3", default-features = false, features = ["macros", "runtime-tokio", "sqlx-sqlite", "sqlite-use-returning-for-3_35"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+futures = "0.3"
+nyquest = { version = "0.4", features = ["async"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+nyquest-backend-nsurlsession = { version = "0.4", features = ["async"] }
 sea-orm-migration = { version = "2.0.3", default-features = false, features = ["runtime-tokio", "sqlx-sqlite"] }
 sys-locale = "0.3"
 thiserror = "2.0.20"

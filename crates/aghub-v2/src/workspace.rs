@@ -1,6 +1,6 @@
 use crate::fonts;
 use crate::installed;
-use crate::subscribe::{self, Category};
+use crate::marketplace::{self, Category};
 use aghub::db::{self, AppDb};
 use aghub::plugin::{self, InstallPlugin, Plugin};
 use gpui_kit::component::WindowExt as _;
@@ -52,31 +52,31 @@ impl RenderOnce for PageHeader {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
-	Subscribe,
+	Marketplace,
 	Plugins,
-	Project,
+	Manage,
 	Settings,
 }
 
 impl Page {
 	fn nav_pages() -> [Self; 3] {
-		[Self::Subscribe, Self::Plugins, Self::Project]
+		[Self::Marketplace, Self::Plugins, Self::Manage]
 	}
 
 	fn title(self) -> String {
 		match self {
-			Self::Subscribe => t!("nav.subscribe").into(),
+			Self::Marketplace => t!("nav.marketplace").into(),
 			Self::Plugins => t!("nav.plugins").into(),
-			Self::Project => t!("nav.project").into(),
+			Self::Manage => t!("nav.manage").into(),
 			Self::Settings => t!("nav.settings").into(),
 		}
 	}
 
 	fn icon(self) -> phosphor_gpui::Icon {
 		match self {
-			Self::Subscribe => Phosphor::Rss.duotone(),
+			Self::Marketplace => Phosphor::Storefront.duotone(),
 			Self::Plugins => Phosphor::PuzzlePiece.duotone(),
-			Self::Project => Phosphor::Folder.duotone(),
+			Self::Manage => Phosphor::Folder.duotone(),
 			Self::Settings => Phosphor::Gear.duotone(),
 		}
 	}
@@ -84,9 +84,10 @@ impl Page {
 
 pub struct Workspace {
 	page: Page,
-	subscribe_category: Category,
-	subscribe_plugin: Option<SharedString>,
-	subscribe_search: Entity<InputState>,
+	marketplace_category: Category,
+	marketplace_plugin: Option<SharedString>,
+	marketplace_search: Entity<InputState>,
+	marketplace_catalog: Entity<marketplace::Catalog>,
 	installed: Vec<Plugin>,
 	installing: Option<SharedString>,
 	_appearance: Subscription,
@@ -100,21 +101,26 @@ impl Workspace {
 			cx.observe_window_appearance(window, |_, window, cx| {
 				Theme::sync_system_appearance(Some(window), cx);
 			});
-		let placeholder = t!("subscribe.search");
-		let subscribe_search = cx.new(|cx| {
+		let placeholder = t!("marketplace.search");
+		let marketplace_search = cx.new(|cx| {
 			InputState::new(window, cx).placeholder(placeholder.clone())
 		});
-		let search =
-			cx.subscribe_in(&subscribe_search, window, |_, _, event, _, cx| {
+		let search = cx.subscribe_in(
+			&marketplace_search,
+			window,
+			|_, _, event, _, cx| {
 				if matches!(event, InputEvent::Change) {
 					cx.notify();
 				}
-			});
+			},
+		);
+		let marketplace_catalog = cx.new(marketplace::Catalog::new);
 		let mut this = Self {
-			page: Page::Subscribe,
-			subscribe_category: Category::All,
-			subscribe_plugin: None,
-			subscribe_search,
+			page: Page::Marketplace,
+			marketplace_category: Category::All,
+			marketplace_plugin: None,
+			marketplace_search,
+			marketplace_catalog,
 			installed: Vec::new(),
 			installing: None,
 			_appearance: appearance,
@@ -140,11 +146,11 @@ impl Workspace {
 		window: &mut Window,
 		cx: &mut Context<Self>,
 	) {
-		if self.page == page && self.subscribe_plugin.is_none() {
+		if self.page == page && self.marketplace_plugin.is_none() {
 			return;
 		}
 		self.page = page;
-		self.subscribe_plugin = None;
+		self.marketplace_plugin = None;
 		window.set_window_title(&page.title());
 		cx.notify();
 	}
@@ -155,31 +161,35 @@ impl Workspace {
 		window: &mut Window,
 		cx: &mut Context<Self>,
 	) {
-		if self.subscribe_plugin.as_ref() == Some(&id) {
+		if self.marketplace_plugin.as_ref() == Some(&id) {
 			return;
 		}
-		self.page = Page::Subscribe;
-		let title = subscribe::item(&id)
+		self.page = Page::Marketplace;
+		let title = self
+			.marketplace_catalog
+			.read(cx)
+			.find(&id)
 			.map(|item| item.name().to_string())
-			.unwrap_or_else(|| Page::Subscribe.title());
-		self.subscribe_plugin = Some(id);
+			.unwrap_or_else(|| Page::Marketplace.title());
+		self.marketplace_plugin = Some(id);
 		window.set_window_title(&title);
 		cx.notify();
 	}
 
 	fn close_plugin(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-		if self.subscribe_plugin.is_none() {
+		if self.marketplace_plugin.is_none() {
 			return;
 		}
-		self.subscribe_plugin = None;
-		window.set_window_title(&Page::Subscribe.title());
+		self.marketplace_plugin = None;
+		window.set_window_title(&Page::Marketplace.title());
 		cx.notify();
 	}
 
-	fn subscribe_item(&self) -> Option<&'static subscribe::Item> {
-		self.subscribe_plugin
+	fn marketplace_item(&self, cx: &App) -> Option<marketplace::Item> {
+		self.marketplace_plugin
 			.as_ref()
-			.and_then(|id| subscribe::item(id))
+			.and_then(|id| self.marketplace_catalog.read(cx).find(id))
+			.cloned()
 	}
 
 	fn is_installed(&self, id: &str) -> bool {
@@ -208,7 +218,7 @@ impl Workspace {
 		window: &mut Window,
 		cx: &mut Context<Self>,
 	) {
-		let Some(item) = self.subscribe_item() else {
+		let Some(item) = self.marketplace_item(cx) else {
 			return;
 		};
 		let id = item.id().clone();
@@ -289,19 +299,24 @@ impl Workspace {
 			))
 	}
 
-	fn subscribe_refresh_button() -> impl IntoElement {
+	fn marketplace_refresh_button(
+		catalog: Entity<marketplace::Catalog>,
+	) -> impl IntoElement {
 		let refresh = t!("action.refresh");
-		Button::new("subscribe-refresh")
+		Button::new("marketplace-refresh")
 			.ghost()
 			.small()
 			.icon(Phosphor::ArrowClockwise.duotone())
 			.tooltip(refresh.clone())
 			.accessibility_label(refresh)
+			.on_click(move |_, _, cx| {
+				catalog.update(cx, |catalog, cx| catalog.reload(cx));
+			})
 	}
 
 	fn render_page_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
-		match (self.page, self.subscribe_item()) {
-			(Page::Subscribe, Some(item)) => {
+		match (self.page, self.marketplace_item(cx)) {
+			(Page::Marketplace, Some(item)) => {
 				let id = item.id().as_ref();
 				let installed = self.is_installed(id);
 				let installing = self
@@ -314,7 +329,7 @@ impl Workspace {
 					t!("action.install")
 				};
 				PageHeader::new([
-					BreadcrumbItem::new(Page::Subscribe.title()).on_click(
+					BreadcrumbItem::new(Page::Marketplace.title()).on_click(
 						cx.listener(|this, _, window, cx| {
 							this.close_plugin(window, cx);
 						}),
@@ -333,25 +348,27 @@ impl Workspace {
 						})),
 				)
 			}
-			(Page::Subscribe, None) => PageHeader::new([self.page.title()])
-				.trailing(Self::subscribe_refresh_button()),
+			(Page::Marketplace, None) => PageHeader::new([self.page.title()])
+				.trailing(Self::marketplace_refresh_button(
+					self.marketplace_catalog.clone(),
+				)),
 			_ => PageHeader::new([self.page.title()]),
 		}
 	}
 
-	fn render_subscribe(&self, cx: &mut Context<Self>) -> impl IntoElement {
-		if let Some(item) = self.subscribe_item() {
-			return subscribe::Detail::new(item.clone()).into_any_element();
+	fn render_marketplace(&self, cx: &mut Context<Self>) -> impl IntoElement {
+		if let Some(item) = self.marketplace_item(cx) {
+			return marketplace::Detail::new(item).into_any_element();
 		}
 
-		let search = t!("subscribe.search");
+		let search = t!("marketplace.search");
 		v_flex()
 			.flex_1()
 			.min_h_0()
 			.min_w_0()
 			.gap_3()
 			.child(
-				Input::new(&self.subscribe_search)
+				Input::new(&self.marketplace_search)
 					.cleanable(true)
 					.prefix(Phosphor::MagnifyingGlass.regular())
 					.aria_label(search)
@@ -362,11 +379,11 @@ impl Workspace {
 			)
 			.child(
 				h_flex().child(
-					TabBar::new("subscribe-categories")
+					TabBar::new("marketplace-categories")
 						.segmented()
-						.selected_index(self.subscribe_category.index())
+						.selected_index(self.marketplace_category.index())
 						.on_click(cx.listener(|this, index, _, cx| {
-							this.subscribe_category =
+							this.marketplace_category =
 								Category::from_index(*index);
 							cx.notify();
 						}))
@@ -383,8 +400,9 @@ impl Workspace {
 				),
 			)
 			.child(
-				subscribe::Grid::new(self.subscribe_category)
-					.query(self.subscribe_search.read(cx).value())
+				marketplace::Grid::new(self.marketplace_category)
+					.catalog(self.marketplace_catalog.clone())
+					.query(self.marketplace_search.read(cx).value())
 					.on_open(cx.listener(
 						|this, id: &SharedString, window, cx| {
 							this.open_plugin(id.clone(), window, cx);
@@ -395,11 +413,11 @@ impl Workspace {
 	}
 
 	fn render_plugins(&self, cx: &mut Context<Self>) -> impl IntoElement {
-		installed::Grid::new(self.installed.clone()).on_open(cx.listener(
-			|this, id: &SharedString, window, cx| {
+		installed::Grid::new(self.installed.clone())
+			.catalog(self.marketplace_catalog.clone())
+			.on_open(cx.listener(|this, id: &SharedString, window, cx| {
 				this.open_plugin(id.clone(), window, cx);
-			},
-		))
+			}))
 	}
 
 	fn render_page(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -413,8 +431,8 @@ impl Workspace {
 			.p_4()
 			.gap_4()
 			.child(self.render_page_header(cx))
-			.when(self.page == Page::Subscribe, |this| {
-				this.child(self.render_subscribe(cx))
+			.when(self.page == Page::Marketplace, |this| {
+				this.child(self.render_marketplace(cx))
 			})
 			.when(self.page == Page::Plugins, |this| {
 				this.child(self.render_plugins(cx))
