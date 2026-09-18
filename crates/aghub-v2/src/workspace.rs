@@ -88,6 +88,7 @@ pub struct Workspace {
 	marketplace_plugin: Option<SharedString>,
 	marketplace_search: Entity<InputState>,
 	marketplace_catalog: Entity<marketplace::Catalog>,
+	marketplace_grid: Entity<marketplace::GridState>,
 	installed: Vec<Plugin>,
 	installing: Option<SharedString>,
 	_appearance: Subscription,
@@ -115,12 +116,15 @@ impl Workspace {
 			},
 		);
 		let marketplace_catalog = cx.new(marketplace::Catalog::new);
+		let marketplace_grid =
+			cx.new(|cx| marketplace::GridState::new(&marketplace_catalog, cx));
 		let mut this = Self {
 			page: Page::Marketplace,
 			marketplace_category: Category::All,
 			marketplace_plugin: None,
 			marketplace_search,
 			marketplace_catalog,
+			marketplace_grid,
 			installed: Vec::new(),
 			installing: None,
 			_appearance: appearance,
@@ -399,16 +403,18 @@ impl Workspace {
 						})),
 				),
 			)
-			.child(
-				marketplace::Grid::new(self.marketplace_category)
-					.catalog(self.marketplace_catalog.clone())
-					.query(self.marketplace_search.read(cx).value())
-					.on_open(cx.listener(
-						|this, id: &SharedString, window, cx| {
-							this.open_plugin(id.clone(), window, cx);
-						},
-					)),
-			)
+			.child({
+				let category = self.marketplace_category;
+				let query = self.marketplace_search.read(cx).value();
+				let on_open =
+					cx.listener(|this, id: &SharedString, window, cx| {
+						this.open_plugin(id.clone(), window, cx);
+					});
+				self.marketplace_grid.update(cx, move |grid, _| {
+					grid.set_context(category, query, on_open);
+				});
+				self.marketplace_grid.clone()
+			})
 			.into_any_element()
 	}
 

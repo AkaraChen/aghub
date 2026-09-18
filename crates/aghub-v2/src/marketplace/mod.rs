@@ -2,18 +2,27 @@ mod catalog;
 
 pub use catalog::{Catalog, Category, Item};
 
+use gpui_kit::Size;
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::avatar::Avatar;
 use gpui_kit::component::link::Link;
+use gpui_kit::component::scroll::Scrollbar;
 use gpui_kit::component::skeleton::Skeleton;
 use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use phosphor_gpui::IconName as Phosphor;
 use rust_i18n::t;
+use std::ops::Range;
 use std::rc::Rc;
 
 type OpenPlugin = Rc<dyn Fn(&SharedString, &mut Window, &mut App)>;
+
+/// Fixed card height so rows can be virtualized: p_4 ×2 + header 24 +
+/// 3 × gap_2 + description 40 + keyword row 24 + meta row 24.
+const CARD_HEIGHT: Pixels = px(168.);
+/// Card height plus the gap_3 row spacing baked into the virtual row size.
+const ROW_HEIGHT: Pixels = px(180.);
 
 impl Category {
 	pub fn title(self) -> String {
@@ -119,7 +128,9 @@ impl RenderOnce for Card {
 		v_flex()
 			.id(id.clone())
 			.w_full()
+			.h(CARD_HEIGHT)
 			.min_w_0()
+			.overflow_hidden()
 			.p_4()
 			.gap_2()
 			.rounded(cx.theme().radius)
@@ -135,6 +146,7 @@ impl RenderOnce for Card {
 					.min_w_0()
 					.items_center()
 					.gap_2()
+					.h(rems(1.5))
 					.child(item_avatar(&item).small())
 					.child(
 						v_flex().min_w_0().flex_1().child(
@@ -160,13 +172,19 @@ impl RenderOnce for Card {
 					.line_clamp(2)
 					.child(item.description().clone()),
 			)
-			.child(keyword_chips(&item, cx))
+			.child(
+				div()
+					.h(rems(1.5))
+					.overflow_hidden()
+					.child(keyword_chips(&item, cx)),
+			)
 			.child(
 				h_flex()
 					.min_w_0()
 					.items_center()
 					.justify_between()
 					.gap_2()
+					.h(rems(1.5))
 					.child(meta_line(&item, cx))
 					.when(!license.is_empty(), |this| {
 						this.child(chip(license, cx))
@@ -335,41 +353,93 @@ impl RenderOnce for Detail {
 	}
 }
 
-#[derive(IntoElement)]
-pub struct Grid {
+/// Virtualized two-column card grid for the marketplace catalog.
+///
+/// Cards are grouped into fixed-height rows of two; the underlying
+/// `v_virtual_list` only renders the rows intersecting the viewport.
+pub struct GridState {
+	catalog: Entity<Catalog>,
 	category: Category,
 	query: SharedString,
-	catalog: Option<Entity<Catalog>>,
 	on_open: Option<OpenPlugin>,
+	items: Rc<Vec<Item>>,
+	row_sizes: Rc<Vec<Size<Pixels>>>,
+	scroll_handle: VirtualListScrollHandle,
+	dirty: bool,
+	_catalog: Subscription,
 }
 
-impl Grid {
-	pub fn new(category: Category) -> Self {
+impl GridState {
+	pub fn new(catalog: &Entity<Catalog>, cx: &mut Context<Self>) -> Self {
+		let _catalog = cx.observe(catalog, |this, _, cx| {
+			this.dirty = true;
+			cx.notify();
+		});
 		Self {
-			category,
+			catalog: catalog.clone(),
+			category: Category::All,
 			query: SharedString::default(),
-			catalog: None,
 			on_open: None,
+			items: Rc::new(Vec::new()),
+			row_sizes: Rc::new(Vec::new()),
+			scroll_handle: VirtualListScrollHandle::new(),
+			dirty: true,
+			_catalog,
 		}
 	}
 
-	pub fn query(mut self, query: impl Into<SharedString>) -> Self {
-		self.query = query.into();
-		self
-	}
-
-	pub fn catalog(mut self, catalog: Entity<Catalog>) -> Self {
-		self.catalog = Some(catalog);
-		self
-	}
-
-	pub fn on_open(
-		mut self,
+	pub fn set_context(
+		&mut self,
+		category: Category,
+		query: impl Into<SharedString>,
 		on_open: impl Fn(&SharedString, &mut Window, &mut App) + 'static,
-	) -> Self {
+	) {
+		let query = query.into();
+		if self.category != category || self.query != query {
+			self.category = category;
+			self.query = query;
+			self.dirty = true;
+			self.scroll_handle.set_offset(point(px(0.), px(0.)));
+		}
 		self.on_open = Some(Rc::new(on_open));
-		self
 	}
+
+	fn sync_rows(&mut self, cx: &App) {
+		if !self.dirty {
+			return;
+		}
+		self.dirty = false;
+		let items = self
+			.catalog
+			.read(cx)
+			.visible(self.category, self.query.as_ref());
+		self.row_sizes =
+			Rc::new(vec![size(px(0.), ROW_HEIGHT); items.len().div_ceil(2)]);
+		self.items = Rc::new(items);
+	}
+}
+
+fn render_row(
+	items: &[Item],
+	row: usize,
+	on_open: &Option<OpenPlugin>,
+) -> AnyElement {
+	let start = row * 2;
+	h_flex()
+		.w_full()
+		.h(ROW_HEIGHT)
+		.pb_3()
+		.gap_3()
+		.children((0..2).map(|column| {
+			div()
+				.flex_1()
+				.min_w_0()
+				.children(items.get(start + column).map(|item| Card {
+					item: item.clone(),
+					on_open: on_open.clone(),
+				}))
+		}))
+		.into_any_element()
 }
 
 fn loading_cards() -> impl IntoElement {
@@ -396,28 +466,34 @@ fn loading_cards() -> impl IntoElement {
 		}))
 }
 
-impl RenderOnce for Grid {
-	fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-		let Some(catalog) =
-			self.catalog.as_ref().map(|catalog| catalog.read(cx))
-		else {
-			return div().id("marketplace-catalog").flex_1().min_h_0();
-		};
-		let items = catalog.visible(self.category, self.query.as_ref());
-		let loading = catalog.is_loading();
-		let error = catalog.error().cloned();
+impl Render for GridState {
+	fn render(
+		&mut self,
+		_: &mut Window,
+		cx: &mut Context<Self>,
+	) -> impl IntoElement {
+		self.sync_rows(cx);
+		let loading = self.catalog.read(cx).is_loading();
+		let error = self.catalog.read(cx).error().cloned();
 		let empty = if self.query.trim().is_empty() {
 			t!("marketplace.empty")
 		} else {
 			t!("marketplace.empty_search")
 		};
+		let has_rows = !self.row_sizes.is_empty();
+		let grid = cx.entity().clone();
+		let row_sizes = self.row_sizes.clone();
+		let items = self.items.clone();
+		let on_open = self.on_open.clone();
+		let scroll_handle = self.scroll_handle.clone();
+		let scrollbar_handle = self.scroll_handle.clone();
 
 		div()
 			.id("marketplace-catalog")
 			.flex_1()
 			.min_h_0()
 			.min_w_0()
-			.overflow_y_scroll()
+			.relative()
 			.when(loading && items.is_empty(), |this| {
 				this.child(
 					v_flex()
@@ -451,13 +527,24 @@ impl RenderOnce for Grid {
 						.child(SharedString::from(empty.into_owned())),
 				)
 			})
-			.when(!items.is_empty(), |this| {
-				this.child(div().w_full().grid().grid_cols(2).gap_3().children(
-					items.into_iter().map(|item| Card {
-						item,
-						on_open: self.on_open.clone(),
-					}),
-				))
+			.when(has_rows, move |this| {
+				this.child(
+					v_virtual_list(
+						grid,
+						"marketplace-rows",
+						row_sizes,
+						move |_grid, rows: Range<usize>, _window, _cx| {
+							rows.map(|row| render_row(&items, row, &on_open))
+								.collect()
+						},
+					)
+					.track_scroll(&scroll_handle)
+					.flex_1()
+					.min_h_0(),
+				)
+			})
+			.when(has_rows, move |this| {
+				this.child(Scrollbar::vertical(&scrollbar_handle))
 			})
 	}
 }
