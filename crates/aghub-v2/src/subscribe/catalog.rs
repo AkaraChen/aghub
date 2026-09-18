@@ -177,6 +177,28 @@ impl Item {
 	pub fn mcp(&self) -> &[McpServer] {
 		&self.mcp
 	}
+
+	pub fn matches(&self, query: &str) -> bool {
+		let query = query.trim();
+		if query.is_empty() {
+			return true;
+		}
+		let query = query.to_lowercase();
+		self.name.as_ref().to_lowercase().contains(&query)
+			|| self.id.as_ref().to_lowercase().contains(&query)
+			|| self.description.as_ref().to_lowercase().contains(&query)
+			|| self.skills.iter().any(|skill| {
+				skill.name.as_ref().to_lowercase().contains(&query)
+					|| skill
+						.description
+						.as_ref()
+						.to_lowercase()
+						.contains(&query)
+			}) || self
+			.mcp
+			.iter()
+			.any(|server| server.name.as_ref().to_lowercase().contains(&query))
+	}
 }
 
 fn parse_catalog(raw: &str) -> Result<Vec<Item>, String> {
@@ -272,6 +294,18 @@ mod tests {
 			attio.source_url(),
 			"https://github.com/cursor/plugins/tree/main/third_party/attio"
 		);
+	}
+
+	#[test]
+	fn matches_name_description_and_mcp() {
+		let advisor = item("advisor").expect("advisor plugin");
+		assert!(advisor.matches(""));
+		assert!(advisor.matches("  "));
+		assert!(advisor.matches("ADVIS"));
+		assert!(advisor.matches("consult"));
+		assert!(!advisor.matches("zzzz-no-match"));
+		let attio = item("attio").expect("attio plugin");
+		assert!(attio.matches("attio"));
 	}
 
 	#[test]

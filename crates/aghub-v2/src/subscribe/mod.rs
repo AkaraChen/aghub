@@ -301,6 +301,7 @@ impl RenderOnce for Detail {
 #[derive(IntoElement)]
 pub struct Grid {
 	category: Category,
+	query: SharedString,
 	on_open: Option<OpenPlugin>,
 }
 
@@ -308,8 +309,14 @@ impl Grid {
 	pub fn new(category: Category) -> Self {
 		Self {
 			category,
+			query: SharedString::default(),
 			on_open: None,
 		}
+	}
+
+	pub fn query(mut self, query: impl Into<SharedString>) -> Self {
+		self.query = query.into();
+		self
 	}
 
 	pub fn on_open(
@@ -323,11 +330,17 @@ impl Grid {
 
 impl RenderOnce for Grid {
 	fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+		let query = self.query.clone();
 		let items: Vec<Item> = catalog()
 			.iter()
-			.filter(|item| self.category.contains(item))
+			.filter(|item| self.category.contains(item) && item.matches(&query))
 			.cloned()
 			.collect();
+		let empty = if query.trim().is_empty() {
+			t!("subscribe.empty")
+		} else {
+			t!("subscribe.empty_search")
+		};
 
 		div()
 			.id("subscribe-catalog")
@@ -340,9 +353,7 @@ impl RenderOnce for Grid {
 					div()
 						.text_sm()
 						.text_color(cx.theme().muted_foreground)
-						.child(SharedString::from(
-							t!("subscribe.empty").into_owned(),
-						)),
+						.child(SharedString::from(empty.into_owned())),
 				)
 			})
 			.when(!items.is_empty(), |this| {

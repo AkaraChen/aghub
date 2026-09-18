@@ -2,6 +2,7 @@ use crate::fonts;
 use crate::subscribe::{self, Category};
 use gpui_kit::component::breadcrumb::{Breadcrumb, BreadcrumbItem};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::sidebar::{
 	Sidebar, SidebarItem, SidebarMenu, SidebarMenuItem,
 };
@@ -81,7 +82,9 @@ pub struct Workspace {
 	page: Page,
 	subscribe_category: Category,
 	subscribe_plugin: Option<SharedString>,
+	subscribe_search: Entity<InputState>,
 	_appearance: Subscription,
+	_search: Subscription,
 }
 
 impl Workspace {
@@ -91,11 +94,23 @@ impl Workspace {
 			cx.observe_window_appearance(window, |_, window, cx| {
 				Theme::sync_system_appearance(Some(window), cx);
 			});
+		let placeholder = t!("subscribe.search");
+		let subscribe_search = cx.new(|cx| {
+			InputState::new(window, cx).placeholder(placeholder.clone())
+		});
+		let search =
+			cx.subscribe_in(&subscribe_search, window, |_, _, event, _, cx| {
+				if matches!(event, InputEvent::Change) {
+					cx.notify();
+				}
+			});
 		let this = Self {
 			page: Page::Subscribe,
 			subscribe_category: Category::All,
 			subscribe_plugin: None,
+			subscribe_search,
 			_appearance: appearance,
+			_search: search,
 		};
 		window.set_window_title(&this.page.title());
 		this
@@ -225,11 +240,22 @@ impl Workspace {
 			return subscribe::Detail::new(item.clone()).into_any_element();
 		}
 
+		let search = t!("subscribe.search");
 		v_flex()
 			.flex_1()
 			.min_h_0()
 			.min_w_0()
 			.gap_3()
+			.child(
+				Input::new(&self.subscribe_search)
+					.cleanable(true)
+					.prefix(Phosphor::MagnifyingGlass.regular())
+					.aria_label(search)
+					.focus_bordered(false)
+					.bg(cx.theme().group_box)
+					.w_full()
+					.max_w(rems(25.)),
+			)
 			.child(
 				h_flex().child(
 					TabBar::new("subscribe-categories")
@@ -252,11 +278,15 @@ impl Workspace {
 						})),
 				),
 			)
-			.child(subscribe::Grid::new(self.subscribe_category).on_open(
-				cx.listener(|this, id: &SharedString, window, cx| {
-					this.open_plugin(id.clone(), window, cx);
-				}),
-			))
+			.child(
+				subscribe::Grid::new(self.subscribe_category)
+					.query(self.subscribe_search.read(cx).value())
+					.on_open(cx.listener(
+						|this, id: &SharedString, window, cx| {
+							this.open_plugin(id.clone(), window, cx);
+						},
+					)),
+			)
 			.into_any_element()
 	}
 
