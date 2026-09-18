@@ -1,4 +1,5 @@
 use crate::fonts;
+use gpui_kit::component::breadcrumb::{Breadcrumb, BreadcrumbItem};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::sidebar::{
 	Sidebar, SidebarItem, SidebarMenu, SidebarMenuItem,
@@ -11,14 +12,14 @@ use rust_i18n::t;
 
 #[derive(IntoElement)]
 struct PageHeader {
-	title: SharedString,
+	breadcrumb: Breadcrumb,
 	trailing: Option<AnyElement>,
 }
 
 impl PageHeader {
-	fn new(title: impl Into<SharedString>) -> Self {
+	fn new(items: impl IntoIterator<Item = impl Into<BreadcrumbItem>>) -> Self {
 		Self {
-			title: title.into(),
+			breadcrumb: Breadcrumb::new().children(items),
 			trailing: None,
 		}
 	}
@@ -35,15 +36,7 @@ impl RenderOnce for PageHeader {
 			.w_full()
 			.items_center()
 			.justify_between()
-			.child(
-				div()
-					.min_w_0()
-					.flex_1()
-					.text_base()
-					.font_weight(FontWeight::MEDIUM)
-					.truncate()
-					.child(self.title),
-			)
+			.child(self.breadcrumb.min_w_0().flex_1())
 			.when_some(self.trailing, |this, trailing| {
 				this.child(div().flex_shrink_0().child(trailing))
 			})
@@ -172,7 +165,7 @@ impl Workspace {
 	}
 
 	fn render_page_header(&self) -> impl IntoElement {
-		let header = PageHeader::new(self.page.title());
+		let header = PageHeader::new([self.page.title()]);
 		match self.page {
 			Page::Subscribe => {
 				header.trailing(Self::subscribe_refresh_button())
