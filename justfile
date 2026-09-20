@@ -9,6 +9,10 @@ set windows-shell := ["cmd.exe", "/c"]
 # needs no network. A real bundle runs `tauri build` directly, outside just.
 export AGHUB_SKIP_SIDECAR := "1"
 
+# aghub-v2 is a macOS-only GPUI app (its deps and code are gated on macOS), so
+# workspace-wide checks skip it on other hosts to stay green on Linux/Windows.
+aghub_v2_exclude := if os() == "macos" { "" } else { "--exclude aghub-v2" }
+
 # Default recipe - build the CLI
 default: build
 
@@ -22,7 +26,7 @@ dev:
 
 # Run all tests
 test:
-    cargo test --workspace
+    cargo test --workspace {{aghub_v2_exclude}}
 
 # Run integration tests only
 integration-test:
@@ -39,7 +43,7 @@ fmt:
 
 # Run clippy linter
 lint:
-    cargo clippy --workspace -- -D warnings
+    cargo clippy --workspace {{aghub_v2_exclude}} -- -D warnings
     cd ./crates/desktop && nr lint
 
 # Clean build artifacts

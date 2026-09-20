@@ -1,0 +1,100 @@
+_version: 2
+nav:
+    marketplace:
+        en: Marketplace
+        zh-CN: 商城
+    plugins:
+        en: Plugins
+        zh-CN: 插件
+    manage:
+        en: Manage
+        zh-CN: 管理
+    settings:
+        en: Settings
+        zh-CN: 设置
+action:
+    refresh:
+        en: Refresh
+        zh-CN: 刷新
+    install:
+        en: Install
+        zh-CN: 安装
+    installed:
+        en: Installed
+        zh-CN: 已安装
+marketplace:
+    loading:
+        en: Loading marketplace…
+        zh-CN: 正在加载商城…
+    load_failed:
+        en: Couldn't load the marketplace
+        zh-CN: 无法加载商城
+    skill_count:
+        en: "%{count} skills"
+        zh-CN: "%{count} 个技能"
+    mcp_count:
+        en: "%{count} MCP"
+        zh-CN: "%{count} 个 MCP"
+    category:
+        all:
+            en: All
+            zh-CN: 全部
+        utilities:
+            en: Utilities
+            zh-CN: 工具
+        developer_tools:
+            en: Developer tools
+            zh-CN: 开发工具
+        productivity:
+            en: Productivity
+            zh-CN: 效率
+        integrations:
+            en: Integrations
+            zh-CN: 集成
+    empty:
+        en: Nothing in this category yet
+        zh-CN: 这一类还没有内容
+    empty_search:
+        en: No matching plugins
+        zh-CN: 没有匹配的插件
+    search:
+        en: Search plugins
+        zh-CN: 搜索插件
+    created_by:
+        en: Created by %{name}
+        zh-CN: 由 %{name} 创建
+    view_source:
+        en: View source
+        zh-CN: 查看源码
+    skills:
+        en: Skills
+        zh-CN: 技能
+    mcp:
+        en: MCP
+        zh-CN: MCP
+    doc_loading:
+        en: Loading plugin files…
+        zh-CN: 正在加载插件文件…
+    doc_failed:
+        en: Couldn't load the plugin files
+        zh-CN: 无法加载插件文件
+    readme_missing:
+        en: This plugin has no README
+        zh-CN: 该插件没有 README
+plugins:
+    empty:
+        en: No plugins installed yet
+        zh-CN: 还没有安装插件
+    install_failed:
+        en: Couldn't install this plugin
+        zh-CN: 无法安装这个插件
+scope:
+    global:
+        en: Global
+        zh-CN: 全局
+    label:
+        en: Scope
+        zh-CN: 范围
+    load_failed:
+        en: Couldn't load projects
+        zh-CN: 无法加载项目
