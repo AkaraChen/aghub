@@ -1,0 +1,3 @@
+# Restart the desktop app when source files change.
+dev:
+    bacon run

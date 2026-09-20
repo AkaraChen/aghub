@@ -1,0 +1,14 @@
+#:schema https://dystroy.org/bacon/.bacon.schema.json
+
+env.CARGO_TERM_COLOR = "always"
+
+# Desktop window never exits, so treat `run` as a long-running restart job.
+[jobs.run]
+command = ["cargo", "run"]
+need_stdout = true
+allow_warnings = true
+background = false
+on_change_strategy = "kill_then_restart"
+kill = ["pkill", "-TERM", "-P"]
+scroll_anchor = "auto"
+watch = ["themes", "locales"]
