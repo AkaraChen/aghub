@@ -10,7 +10,7 @@ use serde::Deserialize;
 pub const CATALOG_URL: &str = "https://raw.githubusercontent.com/aghub-app/agent-plugin-awesome/main/out/all.json";
 
 /// Raw-file base used to resolve per-plugin relative assets (logos).
-const RAW_BASE: &str =
+pub(crate) const RAW_BASE: &str =
 	"https://raw.githubusercontent.com/aghub-app/agent-plugin-awesome/main/out";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,6 +114,7 @@ pub struct Item {
 	pub(super) name: SharedString,
 	pub(super) category: Category,
 	pub(super) description: SharedString,
+	path: SharedString,
 	author: SharedString,
 	version: SharedString,
 	license: SharedString,
@@ -139,6 +140,12 @@ impl Item {
 
 	pub fn category(&self) -> Category {
 		self.category
+	}
+
+	/// Directory name of this plugin inside the catalog, used to reach the
+	/// real plugin files next to `all.json`.
+	pub fn path(&self) -> &SharedString {
+		&self.path
 	}
 
 	pub fn author(&self) -> &SharedString {
@@ -224,6 +231,7 @@ fn parse_item(record: PluginRecord) -> Option<Item> {
 		id: record.name.into(),
 		name: display_name.into(),
 		category,
+		path: path.into(),
 		description: record.description.into(),
 		author: record.author.name.into(),
 		version: record.version.into(),
@@ -404,6 +412,7 @@ mod tests {
 			.find(|item| item.id() == "advisor")
 			.unwrap();
 		assert_eq!(advisor.name().as_ref(), "Advisor");
+		assert_eq!(advisor.path().as_ref(), "advisor");
 		assert_eq!(advisor.category(), Category::DeveloperTools);
 		assert_eq!(advisor.author().as_ref(), "Cursor");
 		assert_eq!(advisor.version().as_ref(), "1.0.0");

@@ -72,6 +72,15 @@ marketplace:
   mcp:
     en: MCP
     zh-CN: MCP
+  doc_loading:
+    en: Loading plugin files…
+    zh-CN: 正在加载插件文件…
+  doc_failed:
+    en: Couldn't load the plugin files
+    zh-CN: 无法加载插件文件
+  readme_missing:
+    en: This plugin has no README
+    zh-CN: 该插件没有 README
 plugins:
   empty:
     en: No plugins installed yet

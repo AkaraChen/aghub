@@ -6,7 +6,7 @@ mod marketplace;
 mod theme;
 mod workspace;
 
-use aghub::db;
+use aghub_v2::db;
 
 use gpui_kit::component::*;
 use gpui_kit::*;

@@ -1,6 +1,8 @@
 mod catalog;
+mod docs;
 
 pub use catalog::{Catalog, Category, Item};
+pub use docs::{Doc, Docs, Manifest};
 
 use gpui_kit::Size;
 use gpui_kit::component::alert::Alert;
@@ -8,6 +10,7 @@ use gpui_kit::component::avatar::Avatar;
 use gpui_kit::component::link::Link;
 use gpui_kit::component::scroll::Scrollbar;
 use gpui_kit::component::skeleton::Skeleton;
+use gpui_kit::component::text::TextView;
 use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -73,9 +76,9 @@ fn chip(label: impl Into<SharedString>, cx: &App) -> impl IntoElement {
 		.child(label.into())
 }
 
-fn keyword_chips(item: &Item, cx: &App) -> impl IntoElement {
+fn keyword_chips(keywords: &[SharedString], cx: &App) -> impl IntoElement {
 	h_flex().min_w_0().flex_wrap().gap_1().children(
-		item.keywords()
+		keywords
 			.iter()
 			.take(3)
 			.cloned()
@@ -176,7 +179,7 @@ impl RenderOnce for Card {
 				div()
 					.h(rems(1.5))
 					.overflow_hidden()
-					.child(keyword_chips(&item, cx)),
+					.child(keyword_chips(item.keywords(), cx)),
 			)
 			.child(
 				h_flex()
@@ -196,11 +199,20 @@ impl RenderOnce for Card {
 #[derive(IntoElement)]
 pub struct Detail {
 	item: Item,
+	doc: Doc,
 }
 
 impl Detail {
 	pub fn new(item: Item) -> Self {
-		Self { item }
+		Self {
+			item,
+			doc: Doc::Loading,
+		}
+	}
+
+	pub fn with_doc(mut self, doc: Doc) -> Self {
+		self.doc = doc;
+		self
 	}
 }
 
@@ -216,15 +228,9 @@ fn section_heading(label: String, count: usize, cx: &App) -> impl IntoElement {
 		)
 }
 
-fn entry_row(
-	id: impl Into<ElementId>,
-	title: SharedString,
-	cx: &App,
-) -> impl IntoElement {
+fn entry_row(title: SharedString, cx: &App) -> impl IntoElement {
 	div()
-		.id(id)
 		.w_full()
-		.min_w_0()
 		.px_2()
 		.py_1p5()
 		.rounded(cx.theme().radius)
@@ -233,36 +239,148 @@ fn entry_row(
 		.border_color(cx.theme().border)
 		.text_sm()
 		.font_weight(FontWeight::MEDIUM)
-		.truncate()
 		.child(title)
 }
 
 fn name_list(
-	prefix: &'static str,
+	id: impl Into<ElementId>,
 	label: String,
 	names: &[SharedString],
 	cx: &App,
 ) -> impl IntoElement {
 	v_flex()
+		.id(id)
 		.w_full()
+		.flex_shrink_0()
 		.gap_3()
 		.child(section_heading(label, names.len(), cx))
-		.children(names.iter().enumerate().map(|(ix, name)| {
-			entry_row(format!("{prefix}-{ix}-{name}"), name.clone(), cx)
+		.children(names.chunks(2).map(|pair| {
+			h_flex()
+				.w_full()
+				.gap_3()
+				.child(div().flex_1().child(entry_row(pair[0].clone(), cx)))
+				.child(div().flex_1().children(
+					pair.get(1).cloned().map(|name| entry_row(name, cx)),
+				))
 		}))
+}
+
+fn render_doc(doc: &Doc, cx: &App) -> AnyElement {
+	match doc {
+		Doc::Loading => v_flex()
+			.w_full()
+			.gap_2()
+			.child(
+				div()
+					.text_sm()
+					.text_color(cx.theme().muted_foreground)
+					.child(SharedString::from(
+						t!("marketplace.doc_loading").into_owned(),
+					)),
+			)
+			.children((0..4).map(|line| {
+				Skeleton::new().h_4().w(if line == 3 {
+					rems(16.)
+				} else {
+					rems(40.)
+				})
+			}))
+			.into_any_element(),
+		Doc::Failed(error) => Alert::error("plugin-doc-failed", error.clone())
+			.title(SharedString::from(
+				t!("marketplace.doc_failed").into_owned(),
+			))
+			.into_any_element(),
+		Doc::Ready {
+			readme: Some(readme),
+			..
+		} => {
+			// TextView fills `h_full()` unless `max_lines` is set. Inside the
+			// page scroller that stretches it over the Skills/MCP block, and
+			// the transparent markdown then shows the "MCP" heading on top of
+			// the README. Cap height so it keeps its natural size instead.
+			div()
+				.id("plugin-readme-wrap")
+				.w_full()
+				.min_w_0()
+				.flex_shrink_0()
+				.child(
+					TextView::markdown("plugin-readme", readme.clone())
+						.max_lines(10_000),
+				)
+				.into_any_element()
+		}
+		Doc::Ready { readme: None, .. } => div()
+			.text_sm()
+			.text_color(cx.theme().muted_foreground)
+			.child(SharedString::from(
+				t!("marketplace.readme_missing").into_owned(),
+			))
+			.into_any_element(),
+	}
 }
 
 impl RenderOnce for Detail {
 	fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
 		let item = self.item;
-		let version = item.version().clone();
-		let license = item.license().clone();
-		let author = item.author().clone();
+		// Header fields come from the plugin directory once the real
+		// `plugin.json` arrives; until then the catalog summary stands in.
+		let manifest: Option<&Manifest> = match &self.doc {
+			Doc::Ready {
+				manifest: Some(manifest),
+				..
+			} => Some(&**manifest),
+			_ => None,
+		};
+		let name = manifest
+			.map(|manifest| manifest.display_name())
+			.unwrap_or(item.name())
+			.clone();
+		let version = manifest
+			.map(|manifest| manifest.version())
+			.unwrap_or(item.version())
+			.clone();
+		let license = manifest
+			.map(|manifest| manifest.license())
+			.unwrap_or(item.license())
+			.clone();
+		let description = manifest
+			.map(|manifest| manifest.description())
+			.unwrap_or(item.description())
+			.clone();
+		let author = manifest
+			.map(|manifest| manifest.author())
+			.unwrap_or(item.author())
+			.clone();
+		let homepage = manifest
+			.map(|manifest| manifest.homepage())
+			.unwrap_or(item.homepage())
+			.clone();
+		let keywords = manifest
+			.map(|manifest| manifest.keywords())
+			.unwrap_or(item.keywords());
+		let logo = manifest
+			.and_then(|manifest| manifest.logo_url())
+			.or(item.logo_url())
+			.cloned();
+		let avatar = Avatar::new().name(name.clone());
+		let avatar = match &logo {
+			Some(url) => avatar.src(url.clone()),
+			None => avatar,
+		};
+		// MCP names come from the real `mcp.json` once loaded. A missing file
+		// falls back to the catalog list instead of wiping the section.
+		let mcp: &[SharedString] = match &self.doc {
+			Doc::Ready { mcp: Some(mcp), .. } => mcp,
+			_ => item.mcp(),
+		};
+		let skills = item.skills();
 		v_flex()
 			.id("marketplace-plugin")
 			.flex_1()
 			.min_h_0()
 			.min_w_0()
+			.overflow_x_hidden()
 			.overflow_y_scroll()
 			.gap_6()
 			.child(
@@ -270,7 +388,7 @@ impl RenderOnce for Detail {
 					.w_full()
 					.items_start()
 					.gap_3()
-					.child(item_avatar(&item).large())
+					.child(avatar.large())
 					.child(
 						v_flex()
 							.min_w_0()
@@ -285,7 +403,7 @@ impl RenderOnce for Detail {
 										div()
 											.text_lg()
 											.font_weight(FontWeight::MEDIUM)
-											.child(item.name().clone()),
+											.child(name),
 									)
 									.when(!version.is_empty(), |this| {
 										this.child(chip(
@@ -302,7 +420,7 @@ impl RenderOnce for Detail {
 									.text_sm()
 									.line_height(rems(1.25))
 									.text_color(cx.theme().muted_foreground)
-									.child(item.description().clone()),
+									.child(description),
 							)
 							.child(
 								h_flex()
@@ -323,7 +441,7 @@ impl RenderOnce for Detail {
 									)
 									.child(
 										Link::new("plugin-source")
-											.href(item.homepage().to_string())
+											.href(homepage.to_string())
 											.text_sm()
 											.child(SharedString::from(
 												t!("marketplace.view_source")
@@ -331,25 +449,26 @@ impl RenderOnce for Detail {
 											)),
 									),
 							)
-							.child(keyword_chips(&item, cx)),
+							.child(keyword_chips(keywords, cx)),
 					),
 			)
-			.when(!item.skills().is_empty(), |this| {
+			.when(!skills.is_empty(), |this| {
 				this.child(name_list(
-					"skill",
+					"plugin-skills",
 					t!("marketplace.skills").into(),
-					item.skills(),
+					skills,
 					cx,
 				))
 			})
-			.when(!item.mcp().is_empty(), |this| {
+			.when(!mcp.is_empty(), |this| {
 				this.child(name_list(
-					"mcp",
+					"plugin-mcp",
 					t!("marketplace.mcp").into(),
-					item.mcp(),
+					mcp,
 					cx,
 				))
 			})
+			.child(render_doc(&self.doc, cx))
 	}
 }
 

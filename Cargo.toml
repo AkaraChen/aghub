@@ -16,6 +16,7 @@ members = [
 	"crates/usage",
 	"crates/prompt",
 	"crates/desktop/src-tauri",
+	"crates/aghub-v2",
 ]
 resolver = "2"
 

@@ -1,4 +1,4 @@
-use aghub::plugin::Plugin;
+use aghub_v2::plugin::Plugin;
 use gpui_kit::component::avatar::Avatar;
 use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder as _;

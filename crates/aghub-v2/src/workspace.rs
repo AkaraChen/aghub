@@ -1,8 +1,8 @@
 use crate::fonts;
 use crate::installed;
 use crate::marketplace::{self, Category};
-use aghub::db::{self, AppDb};
-use aghub::plugin::{self, InstallPlugin, Plugin};
+use aghub_v2::db::{self, AppDb};
+use aghub_v2::plugin::{self, InstallPlugin, Plugin};
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::breadcrumb::{Breadcrumb, BreadcrumbItem};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -88,11 +88,13 @@ pub struct Workspace {
 	marketplace_plugin: Option<SharedString>,
 	marketplace_search: Entity<InputState>,
 	marketplace_catalog: Entity<marketplace::Catalog>,
+	marketplace_docs: Entity<marketplace::Docs>,
 	marketplace_grid: Entity<marketplace::GridState>,
 	installed: Vec<Plugin>,
 	installing: Option<SharedString>,
 	_appearance: Subscription,
 	_search: Subscription,
+	_docs: Subscription,
 }
 
 impl Workspace {
@@ -116,6 +118,8 @@ impl Workspace {
 			},
 		);
 		let marketplace_catalog = cx.new(marketplace::Catalog::new);
+		let marketplace_docs = cx.new(|_| marketplace::Docs::new());
+		let docs = cx.observe(&marketplace_docs, |_, _, cx| cx.notify());
 		let marketplace_grid =
 			cx.new(|cx| marketplace::GridState::new(&marketplace_catalog, cx));
 		let mut this = Self {
@@ -124,11 +128,13 @@ impl Workspace {
 			marketplace_plugin: None,
 			marketplace_search,
 			marketplace_catalog,
+			marketplace_docs,
 			marketplace_grid,
 			installed: Vec::new(),
 			installing: None,
 			_appearance: appearance,
 			_search: search,
+			_docs: docs,
 		};
 		this.reload_installed(cx);
 		window.set_window_title(&this.page.title());
@@ -169,13 +175,17 @@ impl Workspace {
 			return;
 		}
 		self.page = Page::Marketplace;
-		let title = self
-			.marketplace_catalog
-			.read(cx)
-			.find(&id)
+		let item = self.marketplace_catalog.read(cx).find(&id).cloned();
+		let title = item
+			.as_ref()
 			.map(|item| item.name().to_string())
 			.unwrap_or_else(|| Page::Marketplace.title());
-		self.marketplace_plugin = Some(id);
+		self.marketplace_plugin = Some(id.clone());
+		if let Some(item) = item {
+			self.marketplace_docs.update(cx, |docs, cx| {
+				docs.ensure_loaded(&item, cx);
+			});
+		}
 		window.set_window_title(&title);
 		cx.notify();
 	}
@@ -362,7 +372,10 @@ impl Workspace {
 
 	fn render_marketplace(&self, cx: &mut Context<Self>) -> impl IntoElement {
 		if let Some(item) = self.marketplace_item(cx) {
-			return marketplace::Detail::new(item).into_any_element();
+			let doc = self.marketplace_docs.read(cx).doc(item.id());
+			return marketplace::Detail::new(item)
+				.with_doc(doc)
+				.into_any_element();
 		}
 
 		let search = t!("marketplace.search");
