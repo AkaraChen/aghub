@@ -64,18 +64,10 @@ struct CatalogFile {
 	plugins: Vec<PluginRecord>,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 struct AuthorRecord {
 	#[serde(default)]
 	name: String,
-}
-
-impl Default for AuthorRecord {
-	fn default() -> Self {
-		Self {
-			name: String::new(),
-		}
-	}
 }
 
 #[derive(Deserialize)]
