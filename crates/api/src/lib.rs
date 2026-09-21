@@ -1025,6 +1025,34 @@ mod tests {
 	}
 
 	#[test]
+	fn route_project_skill_lock_preserves_source_reference() {
+		let data = tempfile::tempdir().unwrap();
+		let project = tempfile::tempdir().unwrap();
+		let contents = serde_json::json!({
+			"version": 1,
+			"skills": {"demo": {
+				"source": "example/skills", "sourceType": "github",
+				"computedHash": "installed", "ref": "release/v1",
+				"pinnedRef": "v1.2.3"
+			}}
+		});
+		let path = project.path().join("skills-lock.json");
+		let original = serde_json::to_string_pretty(&contents).unwrap();
+		std::fs::write(&path, &original).unwrap();
+		let client = test_client(data.path());
+		let query = url::form_urlencoded::Serializer::new(String::new())
+			.append_pair("project_path", &project.path().to_string_lossy())
+			.finish();
+		let uri = format!("/api/v1/skills/lock/project?{query}");
+		let response = get_auth(&client, &uri);
+		assert_eq!(response.status(), Status::Ok);
+		let response = response_json(response);
+		assert_eq!(response["skills"][0]["ref"], "release/v1");
+		assert_eq!(response["skills"][0]["pinnedRef"], "v1.2.3");
+		assert_eq!(std::fs::read_to_string(path).unwrap(), original);
+	}
+
+	#[test]
 	fn route_skill_source_reads_existing_metadata_without_writing() {
 		let data = tempfile::tempdir().unwrap();
 		let project = tempfile::tempdir().unwrap();

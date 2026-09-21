@@ -6,6 +6,8 @@
 export type LocalSkillLockEntryResponse = {
 	name: string;
 	source: string;
+	ref?: string | null;
+	pinnedRef?: string | null;
 	sourceType: string;
 	computedHash: string;
 };

@@ -2311,6 +2311,12 @@ pub fn get_global_skill_lock(
 		.map(|(name, entry)| SkillLockEntryResponse {
 			name,
 			source: entry.source,
+			ref_name: entry.ref_name,
+			pinned_ref: entry
+				.extra
+				.get("pinnedRef")
+				.and_then(serde_json::Value::as_str)
+				.map(str::to_owned),
 			source_type: entry.source_type,
 			source_url: entry.source_url,
 			skill_path: entry.skill_path,
@@ -2341,6 +2347,12 @@ pub fn get_project_skill_lock(
 		.map(|(name, entry)| LocalSkillLockEntryResponse {
 			name,
 			source: entry.source,
+			ref_name: entry.ref_name,
+			pinned_ref: entry
+				.extra
+				.get("pinnedRef")
+				.and_then(serde_json::Value::as_str)
+				.map(str::to_owned),
 			source_type: entry.source_type,
 			computed_hash: entry.computed_hash,
 		})

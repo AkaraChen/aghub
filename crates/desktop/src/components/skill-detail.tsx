@@ -1,6 +1,5 @@
 import { StarIcon as StarIconOutline } from "@heroicons/react/24/outline";
 import {
-	ArrowPathIcon,
 	ChevronDownIcon,
 	ChevronUpIcon,
 	CodeBracketIcon,
@@ -67,7 +66,7 @@ import {
 } from "./skill-detail-views";
 import { SkillLinkSummary } from "./skill-link-state";
 import { SkillLocationDrift } from "./skill-location-drift";
-import { SyncGithubSkillDialog } from "./sync-github-skill-dialog";
+import { SyncGithubSkillButton } from "./sync-github-skill-button";
 import { TransferDialog } from "./transfer-dialog";
 
 interface SkillDetailProps {
@@ -96,7 +95,6 @@ export function SkillDetail({
 	const [showAllLocations, setShowAllLocations] = useState(false);
 	const [transferDialogOpen, setTransferDialogOpen] = useState(false);
 	const [manageDialogOpen, setManageDialogOpen] = useState(false);
-	const [syncDialogOpen, setSyncDialogOpen] = useState(false);
 	const [manualCopyCheckKey, setManualCopyCheckKey] = useState<string | null>(
 		null,
 	);
@@ -198,6 +196,7 @@ export function SkillDetail({
 					sourceType: entry.sourceType,
 					hash: entry.skillFolderHash,
 					sourceUrl: entry.sourceUrl,
+					reference: entry.pinnedRef ?? entry.ref ?? null,
 					skillPath: entry.skillPath ?? null,
 				};
 			}
@@ -210,6 +209,7 @@ export function SkillDetail({
 					source: entry.source,
 					sourceType: entry.sourceType,
 					hash: entry.computedHash,
+					reference: entry.pinnedRef ?? entry.ref ?? null,
 				};
 			}
 		}
@@ -718,27 +718,24 @@ export function SkillDetail({
 										</div>
 										{sourceUrl && (
 											<div className="flex shrink-0 items-center gap-1">
-												<Tooltip delay={0}>
-													<Button
-														isIconOnly
-														variant="ghost"
-														size="sm"
-														className="size-8 text-muted"
-														aria-label={t(
-															"syncFromSource",
-														)}
-														onPress={() =>
-															setSyncDialogOpen(
-																true,
-															)
-														}
-													>
-														<ArrowPathIcon className="size-4" />
-													</Button>
-													<Tooltip.Content>
-														{t("syncFromSource")}
-													</Tooltip.Content>
-												</Tooltip>
+												<SyncGithubSkillButton
+													key={JSON.stringify([
+														group.name,
+														sourceUrl,
+														currentSkillSource.reference,
+														projectPath,
+													])}
+													group={group}
+													sourceUrl={sourceUrl}
+													reference={
+														currentSkillSource.reference
+													}
+													skillPath={
+														currentSkillSource.skillPath ??
+														null
+													}
+													projectPath={projectPath}
+												/>
 												<Tooltip delay={0}>
 													<Button
 														isIconOnly
@@ -967,21 +964,6 @@ export function SkillDetail({
 				onClose={() => setManageDialogOpen(false)}
 				projectPath={projectPath}
 			/>
-			{sourceUrl && (
-				<SyncGithubSkillDialog
-					group={group}
-					sourceUrl={sourceUrl}
-					skillPath={
-						(currentSkillSource &&
-							"skillPath" in currentSkillSource &&
-							currentSkillSource.skillPath) ||
-						null
-					}
-					isOpen={syncDialogOpen}
-					onClose={() => setSyncDialogOpen(false)}
-					projectPath={projectPath}
-				/>
-			)}
 		</>
 	);
 }

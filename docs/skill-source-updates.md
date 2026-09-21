@@ -52,6 +52,15 @@ only when both issue acceptance paths are implemented and verified.
 
 - Implemented: shared lock extension preservation, gh metadata parsing, existing
   checkout/submodule/worktree source detection, and a scoped read-only source API.
+- The v1.9.1 detail action uses an existing lock source to scan and replace the
+  installed copies in place. It matches the stored Skill path exactly, keeps
+  the recorded ref (a pin takes precedence), preserves links, and uses the
+  existing audit and staged-write guards. It is an explicit replacement, not a
+  background merge of local edits. Authentication errors can retry with a saved
+  credential without reopening the import flow.
+- This action does not advance shared lock hashes: those identify installation
+  records, not per-location replacement baselines. Provider-owned locations are
+  excluded. A missing or ambiguous upstream Skill fails without replacement.
 - Pending: per-installation baselines, update execution and rollback metadata,
-  credential-reference persistence, gh command execution, and the update-entry
-  integration. The two issues are not ready to close.
+  credential-reference persistence, gh command execution, and automatic update
+  checks. The two issues are not ready to close.

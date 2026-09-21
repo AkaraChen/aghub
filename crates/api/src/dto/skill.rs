@@ -476,6 +476,12 @@ pub struct InstallSkillResponse {
 pub struct SkillLockEntryResponse {
 	pub name: String,
 	pub source: String,
+	#[serde(rename = "ref", skip_serializing_if = "Option::is_none")]
+	#[ts(optional = nullable)]
+	pub ref_name: Option<String>,
+	#[serde(rename = "pinnedRef", skip_serializing_if = "Option::is_none")]
+	#[ts(optional = nullable)]
+	pub pinned_ref: Option<String>,
 	#[serde(rename = "sourceType")]
 	pub source_type: String,
 	#[serde(rename = "sourceUrl")]
@@ -511,6 +517,12 @@ pub struct GlobalSkillLockResponse {
 pub struct LocalSkillLockEntryResponse {
 	pub name: String,
 	pub source: String,
+	#[serde(rename = "ref", skip_serializing_if = "Option::is_none")]
+	#[ts(optional = nullable)]
+	pub ref_name: Option<String>,
+	#[serde(rename = "pinnedRef", skip_serializing_if = "Option::is_none")]
+	#[ts(optional = nullable)]
+	pub pinned_ref: Option<String>,
 	#[serde(rename = "sourceType")]
 	pub source_type: String,
 	#[serde(rename = "computedHash")]

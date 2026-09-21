@@ -1286,6 +1286,9 @@ export default {
 	syncingSkill: "同步中...",
 	syncAnyway: "仍要同步",
 	skillSyncedSuccessfully: "Skill 同步成功",
+	skillSyncFailed: "無法同步此 Skill。{{error}}",
+	skillSyncCredentialHint:
+		"檢查來源和網路後重試。私人儲存庫可選擇已儲存的憑證。",
 	skillNotFoundInRepo: "在此分支的儲存庫中未找到此 Skill。",
 	skillFoundInRepo: "在儲存庫中找到 Skill",
 	sourceContainsFavoriteSkill: "包含已收藏的 Skill",

@@ -1293,6 +1293,9 @@ export default {
 	syncingSkill: "Syncing...",
 	syncAnyway: "Sync anyway",
 	skillSyncedSuccessfully: "Skill synced successfully",
+	skillSyncFailed: "Could not sync this Skill. {{error}}",
+	skillSyncCredentialHint:
+		"Check the source and connection, then retry. For a private repository, select a saved credential.",
 	skillNotFoundInRepo:
 		"This skill was not found in the repository on this branch.",
 	skillFoundInRepo: "Skill found in repository",

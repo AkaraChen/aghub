@@ -425,20 +425,6 @@ test("Git sync audits first and confirms the same content digest before writing"
 	await page.getByRole("button", { name: "Sync from source" }).click();
 	const dialog = page.getByRole("dialog", { name: "Sync Skill" });
 	await expect(dialog).toBeVisible();
-	await dialog.getByRole("button", { name: "Scan", exact: true }).click();
-	await expect(dialog.getByText("react-pro description")).toBeVisible();
-	await dialog
-		.getByRole("button", {
-			name: /Compare repository and local versions/,
-		})
-		.click();
-	await dialog
-		.locator("[data-skill-version-choice]")
-		.filter({ hasText: "GitHub" })
-		.click();
-	await dialog
-		.getByRole("button", { name: "Use repository version" })
-		.click();
 	await expect(dialog.getByText("Suspicious", { exact: true })).toBeVisible();
 
 	const sourcePaths = [

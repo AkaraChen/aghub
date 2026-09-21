@@ -6,6 +6,8 @@
 export type SkillLockEntryResponse = {
 	name: string;
 	source: string;
+	ref?: string | null;
+	pinnedRef?: string | null;
 	sourceType: string;
 	sourceUrl: string;
 	skillPath: string | null;
