@@ -9,6 +9,9 @@
 			"react-dom": "19.2.7"
 		}
 	},
+	"overrides": {
+		"@internationalized/date": "3.12.4"
+	},
 	"scripts": {
 		"dev": "vite",
 		"build": "node ./node_modules/@typescript/native/bin/tsc && vite build",
@@ -33,7 +36,7 @@
 		"@heroicons/react": "^2.2.0",
 		"@heroui/react": "3.2.4",
 		"@heroui/styles": "3.2.4",
-		"@internationalized/date": "3.12.3",
+		"@internationalized/date": "3.12.4",
 		"@lobehub/icons-static-svg": "^1.94.0",
 		"@opentelemetry/api-logs": "^0.222.0",
 		"@opentelemetry/exporter-logs-otlp-http": "^0.221.0",
@@ -59,7 +62,7 @@
 		"i18next": "^26.3.6",
 		"i18next-browser-languagedetector": "^8.2.1",
 		"immer": "^11.1.16",
-		"ky": "^2.0.0",
+		"ky": "^2.1.0",
 		"nuqs": "^2.9.5",
 		"pathe": "^2.0.3",
 		"pinyin-pro": "^3.28.2",
