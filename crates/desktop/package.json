@@ -9,6 +9,9 @@
 			"react-dom": "19.2.7"
 		}
 	},
+	"overrides": {
+		"@internationalized/date": "3.12.4"
+	},
 	"scripts": {
 		"dev": "vite",
 		"build": "node ./node_modules/@typescript/native/bin/tsc && vite build",
