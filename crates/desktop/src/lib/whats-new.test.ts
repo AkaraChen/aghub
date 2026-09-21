@@ -68,6 +68,20 @@ describe("pendingWhatsNew", () => {
 });
 
 describe("bundled release notes", () => {
+	it("keeps the final-v1 notice as one paragraph and orders the release sections", () => {
+		const entry = WHATS_NEW_ENTRIES.find(
+			(candidate) => candidate.version === "1.9.1",
+		);
+		expect(entry?.announcement?.["zh-Hans"]).toBe(
+			"1.9.1 将会是 aghub v1.x 的最后一个版本，下一版本将从底层到界面彻底重构，敬请期待。",
+		);
+		const copy = getWhatsNewCopy(entry!, "zh-Hans");
+		expect(copy.highlights[0]?.id).toBe("desktop-pages");
+		expect([
+			...new Set(copy.highlights.map((highlight) => highlight.category)),
+		]).toEqual(["feature", "improvement", "fix"]);
+	});
+
 	it("packages the current beta notes for offline display", () => {
 		expect(WHATS_NEW_ENTRIES.map((entry) => entry.version)).toContain(
 			"1.9.0-beta.1",

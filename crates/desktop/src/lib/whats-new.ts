@@ -5,12 +5,31 @@ export const WHATS_NEW_LOCALES = ["en", "zh-Hans", "zh-Hant"] as const;
 
 export type WhatsNewLocale = (typeof WHATS_NEW_LOCALES)[number];
 export type WhatsNewChannel = "stable" | "beta";
-export type WhatsNewIcon = "sparkles" | "puzzle" | "shield";
+export type WhatsNewIcon =
+	| "sparkles"
+	| "puzzle"
+	| "shield"
+	| "layout"
+	| "list"
+	| "folder"
+	| "prompt"
+	| "document"
+	| "market"
+	| "chart"
+	| "terminal"
+	| "sync"
+	| "models"
+	| "book"
+	| "settings"
+	| "window"
+	| "wrench";
+export type WhatsNewCategory = "feature" | "improvement" | "fix";
 export type LocalizedWhatsNewText = Record<WhatsNewLocale, string>;
 
 export interface WhatsNewItem {
 	id: string;
 	icon: WhatsNewIcon;
+	category?: WhatsNewCategory;
 	title: LocalizedWhatsNewText;
 	description: LocalizedWhatsNewText;
 }
@@ -26,6 +45,7 @@ export interface WhatsNewEntry {
 	channel: WhatsNewChannel;
 	title: LocalizedWhatsNewText;
 	summary: LocalizedWhatsNewText;
+	announcement?: LocalizedWhatsNewText;
 	highlights: WhatsNewItem[];
 	knownIssues: WhatsNewKnownIssue[];
 }
@@ -41,6 +61,7 @@ export interface WhatsNewCopy {
 	highlights: Array<{
 		id: string;
 		icon: WhatsNewIcon;
+		category?: WhatsNewCategory;
 		title: string;
 		description: string;
 	}>;
@@ -87,6 +108,7 @@ export function getWhatsNewCopy(
 		highlights: entry.highlights.map((highlight) => ({
 			id: highlight.id,
 			icon: highlight.icon,
+			category: highlight.category,
 			title: highlight.title[locale],
 			description: highlight.description[locale],
 		})),

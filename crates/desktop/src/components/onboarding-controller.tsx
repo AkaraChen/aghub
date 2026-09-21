@@ -82,6 +82,14 @@ function OnboardingControllerContent({
 		(step) => step.type === "whats-new",
 	);
 	const activeStep = wizardSteps[currentStep];
+	const announcement =
+		activeStep?.type === "whats-new"
+			? activeStep.entry.announcement?.[
+					resolveWhatsNewLocale(
+						i18n.resolvedLanguage ?? i18n.language,
+					)
+				]
+			: undefined;
 	const dismissInFlightRef = useRef(false);
 	const {
 		destroyActiveTour,
@@ -195,6 +203,11 @@ function OnboardingControllerContent({
 									? t("whatsNewWizardTitle")
 									: t("onboardingWizardTitle")}
 							</Modal.Heading>
+							{announcement && (
+								<p className="text-xs leading-5 text-muted">
+									{announcement}
+								</p>
+							)}
 							<p className="text-sm text-muted">
 								{includesWhatsNew
 									? t("whatsNewWizardSubtitle")

@@ -91,7 +91,7 @@
 			case "plugin:app|name":
 				return Promise.resolve("aghub");
 			case "plugin:app|version":
-				return Promise.resolve("1.9.0-beta.1");
+				return Promise.resolve("1.9.1");
 			case "posthog_get_config":
 				return Promise.resolve({ key: null, host: null });
 			case "posthog_get_distinct_id":
@@ -235,7 +235,7 @@
 		setAvailableUpdate() {
 			availableUpdate = {
 				rid: nextRid++,
-				currentVersion: "1.9.0-beta.1",
+				currentVersion: "1.9.1",
 				version: "2.0.0-beta.1",
 				rawJson: {},
 			};

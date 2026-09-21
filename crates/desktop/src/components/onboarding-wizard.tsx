@@ -1,11 +1,23 @@
 import {
 	ArrowsPointingOutIcon,
+	ArrowPathIcon,
 	BookOpenIcon,
+	BuildingStorefrontIcon,
+	ChartBarIcon,
+	ChatBubbleBottomCenterTextIcon,
+	Cog6ToothIcon,
+	CommandLineIcon,
+	CpuChipIcon,
+	DocumentTextIcon,
 	FolderIcon,
+	ListBulletIcon,
 	PuzzlePieceIcon,
 	ServerIcon,
 	ShieldCheckIcon,
 	SparklesIcon,
+	Squares2X2Icon,
+	WindowIcon,
+	WrenchScrewdriverIcon,
 } from "@heroicons/react/24/solid";
 import { Checkbox, Spinner } from "@heroui/react";
 import { type ReactNode, useRef, useState } from "react";
@@ -17,6 +29,7 @@ import type {
 import { cn } from "../lib/utils";
 import {
 	getWhatsNewCopy,
+	type WhatsNewCategory,
 	type WhatsNewIcon,
 	type WhatsNewLocale,
 } from "../lib/whats-new";
@@ -44,6 +57,26 @@ const WHATS_NEW_ICONS: Record<WhatsNewIcon, ReactNode> = {
 	sparkles: <SparklesIcon className="size-5" />,
 	puzzle: <PuzzlePieceIcon className="size-5" />,
 	shield: <ShieldCheckIcon className="size-5" />,
+	layout: <Squares2X2Icon className="size-5" />,
+	list: <ListBulletIcon className="size-5" />,
+	folder: <FolderIcon className="size-5" />,
+	prompt: <ChatBubbleBottomCenterTextIcon className="size-5" />,
+	document: <DocumentTextIcon className="size-5" />,
+	market: <BuildingStorefrontIcon className="size-5" />,
+	chart: <ChartBarIcon className="size-5" />,
+	terminal: <CommandLineIcon className="size-5" />,
+	sync: <ArrowPathIcon className="size-5" />,
+	models: <CpuChipIcon className="size-5" />,
+	book: <BookOpenIcon className="size-5" />,
+	settings: <Cog6ToothIcon className="size-5" />,
+	window: <WindowIcon className="size-5" />,
+	wrench: <WrenchScrewdriverIcon className="size-5" />,
+};
+
+const WHATS_NEW_CATEGORY_KEYS: Record<WhatsNewCategory, string> = {
+	feature: "whatsNewFeatures",
+	improvement: "whatsNewImprovements",
+	fix: "whatsNewFixes",
 };
 
 export function OnboardingWizard({
@@ -134,23 +167,41 @@ export function OnboardingWizard({
 					<h3 className="text-lg font-semibold">{copy.title}</h3>
 					<p className="text-sm text-muted">{copy.summary}</p>
 				</div>
-				<ul className="divide-y divide-border">
-					{copy.highlights.map((item) => (
-						<li key={item.id} className="flex gap-3 py-3">
-							<div className="shrink-0 pt-0.5 text-muted">
-								{WHATS_NEW_ICONS[item.icon]}
-							</div>
-							<div className="min-w-0 space-y-1">
-								<p className="text-sm font-semibold">
-									{item.title}
-								</p>
-								<p className="text-xs leading-5 text-muted">
-									{item.description}
-								</p>
-							</div>
-						</li>
-					))}
-				</ul>
+				{[...new Set(copy.highlights.map((item) => item.category))].map(
+					(category) => (
+						<section key={category ?? "highlights"}>
+							{category && (
+								<h4 className="pt-2 text-xs font-medium tracking-wide text-muted">
+									{t(WHATS_NEW_CATEGORY_KEYS[category])}
+								</h4>
+							)}
+							<ul className="divide-y divide-border">
+								{copy.highlights
+									.filter(
+										(item) => item.category === category,
+									)
+									.map((item) => (
+										<li
+											key={item.id}
+											className="flex gap-3 py-3"
+										>
+											<div className="shrink-0 pt-0.5 text-muted">
+												{WHATS_NEW_ICONS[item.icon]}
+											</div>
+											<div className="min-w-0 space-y-1">
+												<p className="text-sm font-semibold">
+													{item.title}
+												</p>
+												<p className="text-xs leading-5 text-muted">
+													{item.description}
+												</p>
+											</div>
+										</li>
+									))}
+							</ul>
+						</section>
+					),
+				)}
 				{copy.knownIssues.length > 0 && (
 					<div className="space-y-2 border-t border-border pt-3">
 						<h4 className="text-sm font-semibold">

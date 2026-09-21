@@ -31,6 +31,81 @@ knownIssues: []
 `;
 
 describe("release notes manifest", () => {
+	it("keeps an optional localized announcement before the summary", () => {
+		const source = `${manifestSource}\nannouncement:\n  en: The final release of aghub 1.\n  zh-Hans: 这是 aghub 1 的最后一个版本。\n  zh-Hant: 這是 aghub 1 的最後一個版本。\n`;
+		const manifest = parseReleaseManifest(source, "v1.9.0-beta.1.yml");
+		const markdown = renderReleaseMarkdown(manifest);
+		expect(manifest.announcement?.["zh-Hans"]).toBe(
+			"这是 aghub 1 的最后一个版本。",
+		);
+		expect(
+			markdown.indexOf("The final release of aghub 1."),
+		).toBeGreaterThan(0);
+		expect(markdown.indexOf("The final release of aghub 1.")).toBeLessThan(
+			markdown.indexOf("Preview the latest desktop changes."),
+		);
+		expect(markdown).toContain("這是 aghub 1 的最後一個版本。");
+	});
+
+	it("requires all translations when an announcement is present", () => {
+		expect(() =>
+			parseReleaseManifest(
+				`${manifestSource}\nannouncement:\n  en: Final release.\n`,
+				"v1.9.0-beta.1.yml",
+			),
+		).toThrow("announcement.zh-Hans");
+	});
+
+	it("preserves announcement line breaks in the offline catalog", () => {
+		const source = `${manifestSource}\nannouncement:\n  en: |-\n    Final v1 release\n    The next version is a rewrite.\n  zh-Hans: |-\n    v1 最后一个版本\n    下一版本将重构。\n  zh-Hant: |-\n    v1 最後一個版本\n    下一版本將重構。\n`;
+		const manifest = parseReleaseManifest(source, "v1.9.0-beta.1.yml");
+		expect(manifest.announcement?.en).toBe(
+			"Final v1 release\nThe next version is a rewrite.",
+		);
+		expect(serializeAppCatalog([manifest])).toContain(
+			"Final v1 release\\nThe next version is a rewrite.",
+		);
+	});
+
+	it("keeps the full commit and PR history in a folded release-only appendix", () => {
+		const manifest = parseReleaseManifest(
+			manifestSource,
+			"v1.9.0-beta.1.yml",
+		);
+		const history =
+			"## Changes\n\n- Fix windows output ([#476](https://github.com/AkaraChen/aghub/pull/476)) ([abc12345](https://github.com/AkaraChen/aghub/commit/abc12345))";
+		const markdown = renderReleaseMarkdown(manifest, history);
+		expect(markdown).toContain(
+			"<details>\n<summary>Full changelog / 完整更新记录 / 完整更新記錄</summary>",
+		);
+		expect(markdown).toContain(
+			history.replace("## Changes", "### Changes"),
+		);
+		expect(markdown).toMatch(/<\/details>\n$/);
+		expect(serializeAppCatalog([manifest])).not.toContain("abc12345");
+	});
+
+	it("renders category headings without dropping highlights", () => {
+		const manifest = parseReleaseManifest(
+			manifestSource,
+			"v1.9.0-beta.1.yml",
+		);
+		manifest.highlights = (["feature", "improvement", "fix"] as const).map(
+			(category) => ({
+				...manifest.highlights[0]!,
+				id: category,
+				category,
+			}),
+		);
+		const markdown = renderReleaseMarkdown(manifest);
+		expect(markdown).toContain("#### New features");
+		expect(markdown).toContain("#### Improvements");
+		expect(markdown).toContain("#### Fixes and maintenance");
+		expect(
+			markdown.match(/Read What's New without connecting to GitHub\./g),
+		).toHaveLength(3);
+	});
+
 	it("parses the versioned three-locale source", () => {
 		const manifest = parseReleaseManifest(
 			manifestSource,
@@ -39,6 +114,7 @@ describe("release notes manifest", () => {
 
 		expect(manifest.version).toBe("1.9.0-beta.1");
 		expect(manifest.channel).toBe("beta");
+		expect(manifest.announcement).toBeUndefined();
 		expect(manifest.highlights[0]?.title["zh-Hans"]).toBe("离线版本说明");
 	});
 
@@ -56,22 +132,22 @@ describe("release notes manifest", () => {
 		).toThrow("title.zh-Hant");
 	});
 
-	it("renders bilingual product notes before the technical appendix", () => {
+	it("renders product notes in all three locales", () => {
 		const manifest = parseReleaseManifest(
 			manifestSource,
 			"v1.9.0-beta.1.yml",
 		);
-		const markdown = renderReleaseMarkdown(
-			manifest,
-			"## Technical changes\n\n- fix: example",
-		);
+		const markdown = renderReleaseMarkdown(manifest);
 
 		expect(markdown).toContain("## English");
 		expect(markdown).toContain("## 简体中文");
 		expect(markdown).toContain("## 繁體中文");
-		expect(markdown.indexOf("## English")).toBeLessThan(
-			markdown.indexOf("## Technical changes"),
+		expect(markdown).toContain(
+			"Read What's New without connecting to GitHub.",
 		);
+		expect(markdown).toContain("无需连接 GitHub 也能查看新功能。");
+		expect(markdown).toContain("無需連線 GitHub 也能查看新功能。");
+		expect(markdown).not.toContain("Technical changes");
 	});
 
 	it("serializes a deterministic offline app catalog", () => {

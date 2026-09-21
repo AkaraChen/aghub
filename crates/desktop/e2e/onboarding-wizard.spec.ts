@@ -78,10 +78,26 @@ test("upgrade notes are acknowledged after the user sees them", async ({
 	const wizard = page.getByRole("dialog", { name: "What's New in aghub" });
 
 	await expect(wizard).toBeVisible();
-	await expect(wizard.getByText("What's new in 1.9.0-beta.1")).toBeVisible();
+	await expect(wizard.getByText("What's new in 1.9.1")).toBeVisible();
+	await expect(
+		wizard
+			.locator("[data-slot='modal-header']")
+			.getByText(/1\.9\.1 will be the final release of aghub v1\.x/),
+	).toHaveCSS("font-weight", "400");
+	await expect(wizard.getByRole("heading", { level: 4 })).toHaveText([
+		"New features",
+		"Improvements",
+		"Fixes and maintenance",
+	]);
+	await expect(
+		wizard.getByText(
+			"1.9.1 will be the final release of aghub v1.x. The next version will be rebuilt from the ground up, including the interface. Stay tuned.",
+			{ exact: true },
+		),
+	).toBeVisible();
 	await expect(
 		wizard.getByRole("heading", {
-			name: "Plugins, privacy, and desktop updates",
+			name: "Interface redesign and new features",
 		}),
 	).toBeVisible();
 

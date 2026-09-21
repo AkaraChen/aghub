@@ -9,12 +9,31 @@ export const RELEASE_LOCALES = ["en", "zh-Hans", "zh-Hant"] as const;
 
 export type ReleaseLocale = (typeof RELEASE_LOCALES)[number];
 export type ReleaseChannel = "stable" | "beta";
-export type ReleaseIcon = "sparkles" | "puzzle" | "shield";
+export type ReleaseIcon =
+	| "sparkles"
+	| "puzzle"
+	| "shield"
+	| "layout"
+	| "list"
+	| "folder"
+	| "prompt"
+	| "document"
+	| "market"
+	| "chart"
+	| "terminal"
+	| "sync"
+	| "models"
+	| "book"
+	| "settings"
+	| "window"
+	| "wrench";
+export type ReleaseCategory = "feature" | "improvement" | "fix";
 export type LocalizedReleaseText = Record<ReleaseLocale, string>;
 
 export interface ReleaseHighlight {
 	id: string;
 	icon: ReleaseIcon;
+	category?: ReleaseCategory;
 	title: LocalizedReleaseText;
 	description: LocalizedReleaseText;
 }
@@ -30,6 +49,7 @@ export interface ReleaseManifest {
 	channel: ReleaseChannel;
 	title: LocalizedReleaseText;
 	summary: LocalizedReleaseText;
+	announcement?: LocalizedReleaseText;
 	highlights: ReleaseHighlight[];
 	knownIssues: ReleaseKnownIssue[];
 }
@@ -41,22 +61,34 @@ interface AppReleaseCatalog {
 
 const LOCALE_HEADINGS: Record<
 	ReleaseLocale,
-	{ section: string; highlights: string; knownIssues: string }
+	{ section: string; highlights: string; knownIssues: string } & Record<
+		ReleaseCategory,
+		string
+	>
 > = {
 	en: {
 		section: "English",
 		highlights: "Highlights",
 		knownIssues: "Known issues",
+		feature: "New features",
+		improvement: "Improvements",
+		fix: "Fixes and maintenance",
 	},
 	"zh-Hans": {
 		section: "简体中文",
 		highlights: "版本亮点",
 		knownIssues: "已知问题",
+		feature: "新增功能",
+		improvement: "改进",
+		fix: "修复与维护",
 	},
 	"zh-Hant": {
 		section: "繁體中文",
 		highlights: "版本亮點",
 		knownIssues: "已知問題",
+		feature: "新增功能",
+		improvement: "改進",
+		fix: "修正與維護",
 	},
 };
 
@@ -68,7 +100,26 @@ const appCatalogPath = resolve(desktopRoot, "src/generated/release-notes.json");
 const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[\dA-Z.-]+)?(?:\+[\dA-Z.-]+)?$/i;
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CHANNELS = new Set<ReleaseChannel>(["stable", "beta"]);
-const ICONS = new Set<ReleaseIcon>(["sparkles", "puzzle", "shield"]);
+const ICONS = new Set<ReleaseIcon>([
+	"sparkles",
+	"puzzle",
+	"shield",
+	"layout",
+	"list",
+	"folder",
+	"prompt",
+	"document",
+	"market",
+	"chart",
+	"terminal",
+	"sync",
+	"models",
+	"book",
+	"settings",
+	"window",
+	"wrench",
+]);
+const CATEGORIES = new Set<ReleaseCategory>(["feature", "improvement", "fix"]);
 
 function expectRecord(value: unknown, path: string): Record<string, unknown> {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -81,15 +132,16 @@ function expectKeys(
 	record: Record<string, unknown>,
 	required: readonly string[],
 	path: string,
+	optional: readonly string[] = [],
 ): void {
-	const requiredKeys = new Set(required);
+	const allowedKeys = new Set([...required, ...optional]);
 	for (const key of required) {
 		if (!(key in record)) {
 			throw new Error(`${path}.${key} is required`);
 		}
 	}
 	for (const key of Object.keys(record)) {
-		if (!requiredKeys.has(key)) {
+		if (!allowedKeys.has(key)) {
 			throw new Error(`${path}.${key} is not supported`);
 		}
 	}
@@ -143,7 +195,18 @@ function parseHighlights(value: unknown): ReleaseHighlight[] {
 	return expectArray(value, "highlights").map((item, index) => {
 		const path = `highlights[${index}]`;
 		const record = expectRecord(item, path);
-		expectKeys(record, ["id", "icon", "title", "description"], path);
+		expectKeys(record, ["id", "icon", "title", "description"], path, [
+			"category",
+		]);
+		const category = record.category;
+		if (
+			category !== undefined &&
+			!CATEGORIES.has(category as ReleaseCategory)
+		) {
+			throw new Error(
+				`${path}.category must be feature, improvement, or fix`,
+			);
+		}
 		const id = parseId(record.id, `${path}.id`);
 		if (ids.has(id)) {
 			throw new Error(`${path}.id duplicates ${id}`);
@@ -152,6 +215,9 @@ function parseHighlights(value: unknown): ReleaseHighlight[] {
 		return {
 			id,
 			icon: parseIcon(record.icon, `${path}.icon`),
+			...(category === undefined
+				? {}
+				: { category: category as ReleaseCategory }),
 			title: parseLocalizedText(record.title, `${path}.title`),
 			description: parseLocalizedText(
 				record.description,
@@ -193,6 +259,7 @@ export function parseReleaseManifest(
 		record,
 		["version", "channel", "title", "summary", "highlights", "knownIssues"],
 		sourceName,
+		["announcement"],
 	);
 
 	const version = expectString(record.version, `${sourceName}.version`);
@@ -222,6 +289,14 @@ export function parseReleaseManifest(
 		channel,
 		title: parseLocalizedText(record.title, `${sourceName}.title`),
 		summary: parseLocalizedText(record.summary, `${sourceName}.summary`),
+		...("announcement" in record
+			? {
+					announcement: parseLocalizedText(
+						record.announcement,
+						`${sourceName}.announcement`,
+					),
+				}
+			: {}),
 		highlights: parseHighlights(record.highlights),
 		knownIssues: parseKnownIssues(record.knownIssues),
 	};
@@ -249,14 +324,25 @@ function renderLocaleSection(
 		"",
 		`### ${manifest.title[locale]}`,
 		"",
-		manifest.summary[locale],
 	];
+	if (manifest.announcement) lines.push(manifest.announcement[locale], "");
+	lines.push(manifest.summary[locale]);
 	if (manifest.highlights.length > 0) {
-		lines.push("", `#### ${headings.highlights}`, "");
-		for (const highlight of manifest.highlights) {
+		for (const category of new Set(
+			manifest.highlights.map((item) => item.category),
+		)) {
 			lines.push(
-				`- **${highlight.title[locale]}** — ${highlight.description[locale]}`,
+				"",
+				`#### ${category ? headings[category] : headings.highlights}`,
+				"",
 			);
+			for (const highlight of manifest.highlights.filter(
+				(item) => item.category === category,
+			)) {
+				lines.push(
+					`- **${highlight.title[locale]}** — ${highlight.description[locale]}`,
+				);
+			}
 		}
 	}
 	if (manifest.knownIssues.length > 0) {
@@ -279,12 +365,16 @@ export function renderReleaseMarkdown(
 		renderLocaleSection(manifest, "zh-Hans"),
 		renderLocaleSection(manifest, "zh-Hant"),
 	];
-	if (technicalAppendix.trim().length > 0) {
-		const technicalChanges = technicalAppendix
-			.trim()
-			.replace(/^## /gm, "### ");
+	if (technicalAppendix.trim()) {
 		sections.push(
-			`## Technical changes / 技术变更 / 技術變更\n\n${technicalChanges}`,
+			[
+				"<details>",
+				"<summary>Full changelog / 完整更新记录 / 完整更新記錄</summary>",
+				"",
+				technicalAppendix.trim().replace(/^## /gm, "### "),
+				"",
+				"</details>",
+			].join("\n"),
 		);
 	}
 	return `${sections.join("\n\n---\n\n")}\n`;
@@ -392,12 +482,12 @@ async function runCli(): Promise<void> {
 	if (command === "render") {
 		const version = requireOption(args, "--version").replace(/^v/, "");
 		const output = resolve(process.cwd(), requireOption(args, "--output"));
-		const changelogPath = readOption(args, "--changelog");
 		const manifest = manifests.find((entry) => entry.version === version);
 		if (!manifest) {
 			throw new Error(`release manifest ${version} was not found`);
 		}
 		await assertVersionFiles(version);
+		const changelogPath = readOption(args, "--changelog");
 		const changelog = changelogPath
 			? await readFile(resolve(process.cwd(), changelogPath), "utf8")
 			: "";

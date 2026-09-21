@@ -131,7 +131,7 @@ dependencies = [
 
 [[package]]
 name = "aghub"
-version = "0.0.0"
+version = "1.9.1"
 dependencies = [
  "aghub-api",
  "aghub-core",
@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-agents"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "aghub-json",
  "aghub-markdown",
@@ -190,7 +190,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-api"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "aghub-cc-plugins",
  "aghub-core",
@@ -224,7 +224,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-cc-plugins"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "aghub-git",
  "anyhow",
@@ -246,7 +246,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-cli"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "aghub-agents",
  "aghub-cc-plugins",
@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-core"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "aghub-agents",
  "aghub-git",
@@ -286,7 +286,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-git"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "base64 0.23.1",
  "gix",
@@ -299,7 +299,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-inference"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "aghub-json",
  "dirs 6.0.0",
@@ -320,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-json"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "jsonc-parser",
  "serde",
@@ -330,7 +330,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-markdown"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -339,7 +339,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-prompt"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -350,7 +350,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-usage"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -7576,7 +7576,7 @@ dependencies = [
 
 [[package]]
 name = "mcp-catalog"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "reqwest",
  "serde",
@@ -11535,7 +11535,7 @@ checksum = "b2aa850e253778c88a04c3d7323b043aeda9d3e30d5971937c1855769763678e"
 
 [[package]]
 name = "skill"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "aghub-markdown",
  "chrono",
@@ -11558,7 +11558,7 @@ dependencies = [
 
 [[package]]
 name = "skill-audit"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "pulldown-cmark",
  "scraper",
@@ -11586,7 +11586,7 @@ dependencies = [
 
 [[package]]
 name = "skills-sh"
-version = "1.9.0-beta.1"
+version = "1.9.1"
 dependencies = [
  "reqwest",
  "serde",

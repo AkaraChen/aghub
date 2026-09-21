@@ -2,6 +2,283 @@
 	"schemaVersion": 1,
 	"releases": [
 		{
+			"version": "1.9.1",
+			"channel": "stable",
+			"title": {
+				"en": "Interface redesign and new features",
+				"zh-Hans": "界面重构与功能更新",
+				"zh-Hant": "介面重構與功能更新"
+			},
+			"summary": {
+				"en": "Rebuild the home, resource lists, and market pages. Add local prompts, rule history, an MCP market, and usage reports, with improved Skill source sync and cross-agent management.",
+				"zh-Hans": "重构首页、资源列表和市场页面，新增本地提示词库、规则版本记录、MCP 市场和用量统计，完善 Skill 来源同步与跨 Agent 管理。",
+				"zh-Hant": "重構首頁、資源列表和市場頁面，新增本機提示詞庫、規則版本記錄、MCP 市場與用量統計，完善 Skill 來源同步與跨 Agent 管理。"
+			},
+			"announcement": {
+				"en": "1.9.1 will be the final release of aghub v1.x. The next version will be rebuilt from the ground up, including the interface. Stay tuned.",
+				"zh-Hans": "1.9.1 将会是 aghub v1.x 的最后一个版本，下一版本将从底层到界面彻底重构，敬请期待。",
+				"zh-Hant": "1.9.1 將會是 aghub v1.x 的最後一個版本，下一版本將從底層到介面徹底重構，敬請期待。"
+			},
+			"highlights": [
+				{
+					"id": "desktop-pages",
+					"icon": "layout",
+					"category": "feature",
+					"title": {
+						"en": "Redesigned home and navigation",
+						"zh-Hans": "首页与导航重构",
+						"zh-Hant": "首頁與導覽重構"
+					},
+					"description": {
+						"en": "A new Agent center shows enabled agents and their resource counts, with shortcuts to their resources and configuration directories. Search across agents, local resources, and skills.sh from the sidebar.",
+						"zh-Hans": "新增 Agent 中心，集中展示已启用 Agent 及资源数量，直接进入资源页面或打开配置目录。侧栏支持跨 Agent、本地资源和 skills.sh 的全局搜索。",
+						"zh-Hant": "新增 Agent 中心，集中顯示已啟用 Agent 及資源數量，直接進入資源頁面或開啟設定目錄。側欄支援跨 Agent、本機資源和 skills.sh 的全域搜尋。"
+					}
+				},
+				{
+					"id": "resource-lists",
+					"icon": "list",
+					"category": "feature",
+					"title": {
+						"en": "Rebuilt resource lists and batch actions",
+						"zh-Hans": "资源列表与批量操作重构",
+						"zh-Hant": "資源列表與批次操作重構"
+					},
+					"description": {
+						"en": "Skill and MCP lists now share grouping, multi-selection, range selection, drag-and-drop, and context menus. A batch panel manages agent coverage, transfers, and deletion; project resources also gain batch actions.",
+						"zh-Hans": "重做 Skill 与 MCP 列表，统一分组、多选、范围选择、拖放和右键菜单。批量面板可管理各 Agent 中的安装情况、转移和删除资源，项目内资源也支持批量操作。",
+						"zh-Hant": "重做 Skill 與 MCP 列表，統一分組、多選、範圍選取、拖放和右鍵選單。批次面板可管理各 Agent 中的安裝情況、轉移和刪除資源，專案內資源也支援批次操作。"
+					}
+				},
+				{
+					"id": "source-collections",
+					"icon": "folder",
+					"category": "feature",
+					"title": {
+						"en": "Skill repository collections",
+						"zh-Hans": "Skill 仓库集合",
+						"zh-Hant": "Skill 儲存庫集合"
+					},
+					"description": {
+						"en": "Skills from the same source share a collection page with members, installation and update dates, and agent coverage. Select the whole collection for batch management and keep favorite collections near the top.",
+						"zh-Hans": "同一来源的 Skill 按集合展示，可查看成员、安装与更新时间以及各 Agent 的安装情况，支持整组选择、批量管理和收藏置顶。",
+						"zh-Hant": "同一來源的 Skill 依集合顯示，可檢視成員、安裝與更新時間，以及各 Agent 的安裝情況，支援整組選取、批次管理和收藏置頂。"
+					}
+				},
+				{
+					"id": "local-prompts",
+					"icon": "prompt",
+					"category": "feature",
+					"title": {
+						"en": "Local prompt library",
+						"zh-Hans": "本地提示词库",
+						"zh-Hant": "本機提示詞庫"
+					},
+					"description": {
+						"en": "Save and edit prompts locally, organize them by category and tag, and copy their content. Detect template variables and import or export backups; Settings show the storage location.",
+						"zh-Hans": "在本机保存和编辑提示词，按分类与标签整理，识别模板变量并复制内容。支持备份导入导出，可在设置中查看存储位置。",
+						"zh-Hant": "在本機儲存和編輯提示詞，依分類與標籤整理，辨識範本變數並複製內容。支援備份匯入匯出，可在設定中檢視儲存位置。"
+					}
+				},
+				{
+					"id": "local-rules",
+					"icon": "document",
+					"category": "feature",
+					"title": {
+						"en": "Rule editing and history",
+						"zh-Hans": "规则编辑与版本记录",
+						"zh-Hant": "規則編輯與版本記錄"
+					},
+					"description": {
+						"en": "Edit agent instruction files, keep local snapshots, and restore earlier versions. Rule settings include snapshot retention and are separate from prompt settings.",
+						"zh-Hans": "编辑 Agent 规则文件，保存本地快照并恢复历史版本。规则与提示词各有独立设置页，可调整快照保留数量。",
+						"zh-Hant": "編輯 Agent 規則檔案，儲存本機快照並還原歷史版本。規則與提示詞各有獨立設定頁，可調整快照保留數量。"
+					}
+				},
+				{
+					"id": "mcp-market",
+					"icon": "market",
+					"category": "feature",
+					"title": {
+						"en": "MCP market",
+						"zh-Hans": "MCP 市场",
+						"zh-Hant": "MCP 市場"
+					},
+					"description": {
+						"en": "Search MCP Registry or a compatible custom registry, view the full server identifier, version, update date, and transport, then preview the configuration and install to selected agents.",
+						"zh-Hans": "搜索 MCP Registry 或兼容的自定义源，查看完整服务标识、版本、更新时间和传输方式，预览配置后安装到所选 Agent。",
+						"zh-Hant": "搜尋 MCP Registry 或相容的自訂來源，檢視完整服務識別名稱、版本、更新時間和傳輸方式，預覽設定後安裝到所選 Agent。"
+					}
+				},
+				{
+					"id": "usage",
+					"icon": "chart",
+					"category": "feature",
+					"title": {
+						"en": "Usage reports",
+						"zh-Hans": "用量统计",
+						"zh-Hant": "用量統計"
+					},
+					"description": {
+						"en": "View daily usage, costs, and token breakdowns through ccusage, with configurable date ranges, runtime, and refresh settings. Optional home cards support custom layouts and warning thresholds; they are off by default.",
+						"zh-Hans": "通过 ccusage 查看每日用量、费用和 Token 明细，可设置日期范围、运行方式和刷新周期。首页用量卡片可自定义布局和提醒阈值，默认关闭。",
+						"zh-Hant": "透過 ccusage 檢視每日用量、費用和 Token 明細，可設定日期範圍、執行方式和重新整理週期。首頁用量卡片可自訂版面與提醒門檻，預設關閉。"
+					}
+				},
+				{
+					"id": "skill-audit",
+					"icon": "shield",
+					"category": "feature",
+					"title": {
+						"en": "Skill security checks",
+						"zh-Hans": "Skill 安全检查",
+						"zh-Hant": "Skill 安全檢查"
+					},
+					"description": {
+						"en": "Inspect Skill content before installation, import, or source sync. View findings and review flagged content in the app, with audit preferences in Settings.",
+						"zh-Hans": "安装、导入和来源同步前检查 Skill 内容，在应用内查看风险提示并确认处理，检查选项可在设置中调整。",
+						"zh-Hant": "安裝、匯入和來源同步前檢查 Skill 內容，在應用程式內檢視風險提示並確認處理，檢查選項可在設定中調整。"
+					}
+				},
+				{
+					"id": "codex-skills",
+					"icon": "terminal",
+					"category": "feature",
+					"title": {
+						"en": "Codex Skill discovery and visibility",
+						"zh-Hans": "Codex Skill 识别与显示管理",
+						"zh-Hant": "Codex Skill 辨識與顯示管理"
+					},
+					"description": {
+						"en": "Discover built-in, plugin, and nested Skills. Choose which local copies appear in Codex and optionally show display names after command names in aghub.",
+						"zh-Hans": "识别内置、插件及嵌套 Skill，选择在 Codex 中显示哪些本地副本，并设置是否在 aghub 的命令名后显示 display_name。",
+						"zh-Hant": "辨識內建、外掛及巢狀 Skill，選擇在 Codex 中顯示哪些本機副本，並設定是否在 aghub 的命令名稱後顯示 display_name。"
+					}
+				},
+				{
+					"id": "source-sync",
+					"icon": "sync",
+					"category": "feature",
+					"title": {
+						"en": "Skill source sync",
+						"zh-Hans": "Skill 来源同步",
+						"zh-Hant": "Skill 來源同步"
+					},
+					"description": {
+						"en": "Update installed copies from the recorded repository and ref directly in Skill details. Sync preserves links and stops if local files change during the operation; inspect source information for existing Git checkouts.",
+						"zh-Hans": "在详情页直接按已记录的仓库和版本引用更新 Skill，保留现有链接；同步期间若本地文件变化，会停止写入。支持查看已有 Git 仓库的来源信息。",
+						"zh-Hant": "在詳情頁直接依已記錄的儲存庫和版本參照更新 Skill，保留現有連結；同步期間若本機檔案變更，會停止寫入。支援檢視既有 Git 儲存庫的來源資訊。"
+					}
+				},
+				{
+					"id": "provider-models",
+					"icon": "models",
+					"category": "feature",
+					"title": {
+						"en": "Provider models and routing",
+						"zh-Hans": "Provider 模型与路由",
+						"zh-Hant": "Provider 模型與路由"
+					},
+					"description": {
+						"en": "Fetch model lists from provider APIs and assign providers and models to agents. Unsaved model entries are retained when changing provider settings.",
+						"zh-Hans": "从 Provider API 获取模型列表，为 Agent 指定 Provider 和模型。切换 Provider 设置时保留未保存的模型内容。",
+						"zh-Hant": "從 Provider API 取得模型列表，為 Agent 指定 Provider 和模型。切換 Provider 設定時保留未儲存的模型內容。"
+					}
+				},
+				{
+					"id": "skill-discovery",
+					"icon": "book",
+					"category": "improvement",
+					"title": {
+						"en": "Skill locations and copy comparisons",
+						"zh-Hans": "Skill 位置与副本对比",
+						"zh-Hant": "Skill 位置與副本比較"
+					},
+					"description": {
+						"en": "Manage shared and agent-specific Skill directories together. Compare complete paths, link targets, and file differences, choose which version to keep, and preserve links or convert them to copies.",
+						"zh-Hans": "一起管理通用目录和各 Agent 独立目录中的 Skill。查看完整路径、链接目标和文件差异，选择保留的版本，并保留链接或转为独立副本。",
+						"zh-Hant": "一起管理通用目錄和各 Agent 獨立目錄中的 Skill。檢視完整路徑、連結目標和檔案差異，選擇保留的版本，並保留連結或轉為獨立副本。"
+					}
+				},
+				{
+					"id": "skill-plugin-markets",
+					"icon": "market",
+					"category": "improvement",
+					"title": {
+						"en": "Unified market pages",
+						"zh-Hans": "市场页面与导入流程统一",
+						"zh-Hant": "市場頁面與匯入流程統一"
+					},
+					"description": {
+						"en": "Bring skills.sh, MCP, Claude plugins, and remote Skill imports into one market page. Search results stay inside the market shell; restore plugin source management and preserve the selected install scope.",
+						"zh-Hans": "将 skills.sh、MCP、Claude 插件和远端 Skill 导入集中到市场页，搜索结果保留页头与导航。恢复插件市场来源管理入口，并保留所选安装作用域。",
+						"zh-Hant": "將 skills.sh、MCP、Claude 外掛和遠端 Skill 匯入集中到市場頁，搜尋結果保留頁首與導覽。恢復外掛市場來源管理入口，並保留所選安裝範圍。"
+					}
+				},
+				{
+					"id": "settings-updates-privacy",
+					"icon": "settings",
+					"category": "improvement",
+					"title": {
+						"en": "Settings and desktop updates",
+						"zh-Hans": "设置与桌面体验",
+						"zh-Hant": "設定與桌面體驗"
+					},
+					"description": {
+						"en": "Add automatic update checks, a beta channel, and offline release notes. Settings tabs wrap in narrow windows, sidebar sections can be hidden, and Windows gains tray and autostart support. Usage analytics are opt-in.",
+						"zh-Hans": "支持自动检查更新、测试版通道和离线版本说明。设置栏适配较窄窗口，侧栏栏目可隐藏，Windows 支持托盘和开机启动，使用情况分析由用户主动开启。",
+						"zh-Hant": "支援自動檢查更新、測試版通道和離線版本說明。設定列適配較窄視窗，側欄項目可隱藏，Windows 支援系統匣和開機啟動，使用情況分析由使用者主動開啟。"
+					}
+				},
+				{
+					"id": "mcp-compatibility",
+					"icon": "wrench",
+					"category": "improvement",
+					"title": {
+						"en": "MCP configuration compatibility",
+						"zh-Hans": "MCP 配置兼容",
+						"zh-Hant": "MCP 設定相容性"
+					},
+					"description": {
+						"en": "Improve Streamable HTTP support across agents. Preserve authentication settings and unrelated fields when editing, and review imported configurations before writing them.",
+						"zh-Hans": "完善各 Agent 的 Streamable HTTP 适配，编辑时保留认证配置及其他字段，导入配置前可先检查内容。",
+						"zh-Hant": "完善各 Agent 的 Streamable HTTP 適配，編輯時保留驗證設定及其他欄位，匯入設定前可先檢查內容。"
+					}
+				},
+				{
+					"id": "windows-compatibility",
+					"icon": "window",
+					"category": "fix",
+					"title": {
+						"en": "Windows fixes",
+						"zh-Hans": "Windows 修复",
+						"zh-Hant": "Windows 修正"
+					},
+					"description": {
+						"en": "Fix flashing console windows, localized system-version output, and JavaScript ccusage startup through Node.",
+						"zh-Hans": "修复控制台闪现、系统版本信息乱码，以及 JavaScript 版 ccusage 的 Node 启动问题。",
+						"zh-Hant": "修正主控台閃現、系統版本資訊亂碼，以及 JavaScript 版 ccusage 的 Node 啟動問題。"
+					}
+				},
+				{
+					"id": "security-maintenance",
+					"icon": "wrench",
+					"category": "fix",
+					"title": {
+						"en": "Security and compatibility fixes",
+						"zh-Hans": "安全与兼容性修复",
+						"zh-Hant": "安全與相容性修正"
+					},
+					"description": {
+						"en": "Tighten local API authentication, file-write checks, and archive extraction validation. Fix agent paths, Skill counts, non-ASCII description limits, and WebKit imports. Update dependencies and improve search accessibility and list performance.",
+						"zh-Hans": "加强本地 API 认证、文件写入及压缩包解包校验。修正 Agent 路径、Skill 数量、非 ASCII 描述长度及 WebKit 导入问题，更新依赖并改进搜索无障碍支持和列表性能。",
+						"zh-Hant": "加強本機 API 驗證、檔案寫入及壓縮檔解壓縮檢查。修正 Agent 路徑、Skill 數量、非 ASCII 描述長度及 WebKit 匯入問題，更新相依套件並改進搜尋無障礙支援和列表效能。"
+					}
+				}
+			],
+			"knownIssues": []
+		},
+		{
 			"version": "1.9.0-beta.1",
 			"channel": "beta",
 			"title": {

@@ -53,6 +53,11 @@ jobs:
                   fi
 
                   PREVIOUS_TAG="$(git describe --tags --abbrev=0 "${RELEASE_TAG}^")"
+                  # 1.9.1 includes the full update history since 1.2.1, including beta releases.
+                  if [[ "$VERSION" == "1.9.1" ]]; then
+                      PREVIOUS_TAG="v1.2.1"
+                  fi
+                  git merge-base --is-ancestor "$PREVIOUS_TAG" "$RELEASE_TAG"
                   PRERELEASE=false
                   if [[ "$VERSION" == *-* ]]; then
                       PRERELEASE=true

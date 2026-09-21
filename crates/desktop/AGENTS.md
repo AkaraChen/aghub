@@ -134,8 +134,9 @@ From `tauri.conf.json`:
   generated `src/generated/release-notes.json`. Do not edit that JSON by hand.
 - Run `bun run release-notes:check` before tagging. The release workflow also
   checks that Cargo, Tauri, and desktop package versions match the manifest.
-- GitHub Release bodies use the manifest first and append the `git-cliff`
-  output as a technical changes section.
+- What's New summarizes final user-facing changes from the manifest.
+- GitHub Release bodies use the manifest first and append the complete
+  git-cliff PR/commit history in a collapsed technical changes section.
 
 ## NOTES
 
