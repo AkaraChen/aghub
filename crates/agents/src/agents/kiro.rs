@@ -17,13 +17,19 @@ define_skill_paths! {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "kiro",
 	display_name: "Kiro",
+	surfaces: &[AgentSurface::cli(
+		"cli",
+		&["kiro"],
+		&[global_data_dir],
+		&["--version"],
+	)],
+	precedence: ResourcePrecedence::uniform(ScopePrecedence::ProjectThenGlobal),
 	mcp_parse_config: Some(mcp_strategy::parse_json_map_mcp_servers),
 	mcp_serialize_config: Some(mcp_strategy::serialize_json_map_mcp_servers),
 	load_mcps,
 	save_mcps,
 	mcp_global_path: Some(mcp_global_path),
 	mcp_project_path: Some(mcp_project_path),
-	global_data_dir,
 	capabilities: Capabilities {
 		skills: SkillCapabilities {
 			scopes: ScopeSupport {
@@ -31,6 +37,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				project: true,
 			},
 			universal: false,
+			discovery: SkillDiscovery::STANDARD,
+			universal_global_path: None,
 		},
 		mcp: McpCapabilities {
 			scopes: ScopeSupport {
@@ -52,15 +60,17 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	global_skill_paths: Some(GlobalSkillPaths {
 		read: global_skills_paths,
 		write: global_skill_write_path,
+		classify: None,
 	}),
 	project_skill_paths: Some(ProjectSkillPaths {
 		read: project_skills_paths,
 		write: project_skill_write_path,
+		classify: None,
 	}),
+	global_sub_agent_paths: None,
+	project_sub_agent_paths: None,
 	load_sub_agents: load_sub_agents_noop,
 	save_sub_agents: save_sub_agents_noop,
-	cli_name: "kiro",
-	validate_args: &["--version"],
 	project_markers: &[".kiro"],
 	skills_cli_name: Some("kiro-cli"),
 	rule_paths: None,

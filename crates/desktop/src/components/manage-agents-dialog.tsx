@@ -106,7 +106,7 @@ export function ManageAgentsDialog({
 		() =>
 			(availableAgents ?? []).filter(
 				(a) =>
-					a?.isUsable &&
+					a?.isConfigurable &&
 					supportsRequirements(a) &&
 					supportsMcpScope(a, projectPath ? "project" : "global") &&
 					groups.every((group) =>

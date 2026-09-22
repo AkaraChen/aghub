@@ -5,7 +5,11 @@ import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 
 interface AgentSelectorProps {
-	agents: Array<{ id: string; display_name: string }>;
+	agents: Array<{
+		id: string;
+		display_name: string;
+		isDetected?: boolean;
+	}>;
 	selectedKeys: Set<string>;
 	onSelectionChange: (keys: Set<string>) => void;
 	label?: string;
@@ -30,6 +34,9 @@ export function AgentSelector({
 	isDisabled = false,
 }: AgentSelectorProps) {
 	const { t } = useTranslation();
+	const preparesWithoutRuntime = agents.some(
+		(agent) => agent.isDetected === false && selectedKeys.has(agent.id),
+	);
 
 	if (agents.length === 0) {
 		return (
@@ -89,6 +96,11 @@ export function AgentSelector({
 					})}
 				</TagGroup.List>
 			</TagGroup>
+			{preparesWithoutRuntime && (
+				<p className="text-xs text-muted">
+					{t("prepareConfigRuntimeUnconfirmed")}
+				</p>
+			)}
 			{errorMessage && <FieldError>{errorMessage}</FieldError>}
 		</div>
 	);

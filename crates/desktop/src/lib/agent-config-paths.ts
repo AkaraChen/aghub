@@ -6,11 +6,11 @@ import type { AgentInfo } from "../generated/dto";
  * folder" button.
  *
  * The backend is the single source of truth: the `agent_config_dir` Tauri
- * command reads the agent descriptor's `global_data_dir` (built on the `dirs`
- * crate) and returns a platform-correct absolute path, so the renderer hands the
- * result straight to `revealItemInDir` — no `~` expansion or path reconstruction
- * here. Returns `null` when the agent has no config dir, so the caller hides the
- * button.
+ * command reads the first configuration path declared by the agent's runtime
+ * surfaces and returns a platform-correct absolute path, so the renderer hands
+ * the result straight to `revealItemInDir` — no `~` expansion or path
+ * reconstruction here. Returns `null` when the agent has no config dir, so the
+ * caller hides the button.
  */
 export async function resolveAgentConfigPath(
 	agent: AgentInfo,

@@ -50,12 +50,13 @@ export function CreateSubAgentPanel({
 		() =>
 			availableAgents.filter(
 				(a) =>
-					a.isUsable &&
+					a.isConfigurable &&
 					supportsSubAgent(a) &&
 					supportsSubAgentScope(a, scope),
 			),
 		[availableAgents, scope],
 	);
+	const detectedDefault = capableAgents.find((agent) => agent.isUsable);
 
 	const [error, setError] = useState<string | null>(null);
 
@@ -79,7 +80,7 @@ export function CreateSubAgentPanel({
 		mode: "onSubmit",
 		reValidateMode: "onChange",
 		defaultValues: {
-			selectedAgents: capableAgents[0] ? [capableAgents[0].id] : [],
+			selectedAgents: detectedDefault ? [detectedDefault.id] : [],
 			name: "",
 			description: "",
 			instruction: "",

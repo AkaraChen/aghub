@@ -73,6 +73,14 @@ fn sub_agent_project_dir(root: &Path) -> Option<PathBuf> {
 	Some(root.join(".claude/agents"))
 }
 
+fn global_sub_agent_paths() -> Vec<PathBuf> {
+	sub_agent_global_dir().into_iter().collect()
+}
+
+fn project_sub_agent_paths(root: &Path) -> Vec<PathBuf> {
+	sub_agent_project_dir(root).into_iter().collect()
+}
+
 fn load_sub_agents(
 	project_root: Option<&Path>,
 	scope: crate::ResourceScope,
@@ -102,13 +110,19 @@ fn save_sub_agents(
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "claude",
 	display_name: "Claude Code",
+	surfaces: &[AgentSurface::cli(
+		"cli",
+		&["claude"],
+		&[global_data_dir],
+		&["--version"],
+	)],
+	precedence: ResourcePrecedence::uniform(ScopePrecedence::ProjectThenGlobal),
 	mcp_parse_config: Some(mcp_strategy::parse_json_map_mcp_servers),
 	mcp_serialize_config: Some(mcp_strategy::serialize_json_map_mcp_servers),
 	load_mcps,
 	save_mcps,
 	mcp_global_path: Some(mcp_global_path),
 	mcp_project_path: Some(mcp_project_path),
-	global_data_dir,
 	capabilities: Capabilities {
 		skills: SkillCapabilities {
 			scopes: ScopeSupport {
@@ -116,6 +130,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				project: true,
 			},
 			universal: false,
+			discovery: SkillDiscovery::STANDARD,
+			universal_global_path: None,
 		},
 		mcp: McpCapabilities {
 			scopes: ScopeSupport {
@@ -137,15 +153,23 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	global_skill_paths: Some(GlobalSkillPaths {
 		read: global_skills_paths,
 		write: global_skill_write_path,
+		classify: None,
 	}),
 	project_skill_paths: Some(ProjectSkillPaths {
 		read: project_skills_paths,
 		write: project_skill_write_path,
+		classify: None,
+	}),
+	global_sub_agent_paths: Some(GlobalSubAgentPaths {
+		read: global_sub_agent_paths,
+		write: sub_agent_global_dir,
+	}),
+	project_sub_agent_paths: Some(ProjectSubAgentPaths {
+		read: project_sub_agent_paths,
+		write: sub_agent_project_dir,
 	}),
 	load_sub_agents,
 	save_sub_agents,
-	cli_name: "claude",
-	validate_args: &["--version"],
 	project_markers: &[".claude", ".mcp.json"],
 	skills_cli_name: Some("claude-code"),
 	rule_paths: Some(RulePaths {

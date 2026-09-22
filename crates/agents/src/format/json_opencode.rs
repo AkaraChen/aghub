@@ -93,6 +93,7 @@ pub fn parse(content: &str) -> Result<AgentConfig> {
 			transport,
 			timeout: None,
 			config_source: None,
+			origin: None,
 		});
 	}
 

@@ -92,6 +92,15 @@ impl SkillTarget {
 			Self::Agent(agent) => agent_skill_paths(agent, project_root, scope),
 		}
 	}
+
+	pub(crate) fn discovery(self) -> aghub_agents::SkillDiscovery {
+		match self {
+			Self::Universal => aghub_agents::SkillDiscovery::STANDARD,
+			Self::Agent(agent) => {
+				registry::get(agent).capabilities.skills.discovery
+			}
+		}
+	}
 }
 
 fn resolve_destination_identity(path: PathBuf) -> PathBuf {
@@ -221,13 +230,6 @@ fn agent_skill_paths(
 	let universal_paths = universal_skill_paths(project_root, scope);
 	let native_write = descriptor.skill_write_path(project_root, scope);
 
-	if native_write
-		.as_ref()
-		.is_some_and(|path| universal_paths.contains(path))
-	{
-		return universal_paths;
-	}
-
 	let claimed_paths = registered_skill_write_paths(project_root, scope);
 	descriptor
 		.native_skill_read_paths(project_root, scope)
@@ -280,6 +282,15 @@ impl AgentAdapter for SkillTargetAdapter {
 
 	fn supports_sub_agent_scope(&self, _scope: ResourceScope) -> bool {
 		false
+	}
+
+	fn resource_precedence(&self) -> crate::ResourcePrecedence {
+		match self.target {
+			SkillTarget::Universal => crate::ResourcePrecedence::uniform(
+				crate::ScopePrecedence::ProjectThenGlobal,
+			),
+			SkillTarget::Agent(agent) => registry::get(agent).precedence,
+		}
 	}
 
 	fn mcp_config_path(
@@ -346,8 +357,11 @@ impl AgentAdapter for SkillTargetAdapter {
 		scope: ResourceScope,
 	) -> Result<AgentConfig> {
 		let mut config = AgentConfig::new();
-		config.skills = crate::skills::load_skills_from_dirs(
+		let options = crate::skills::SkillDiscoveryOptions::default()
+			.for_agent(self.target.discovery());
+		config.skills = crate::skills::load_skills_from_dirs_with_options(
 			&self.target.read_paths(scope, project_root),
+			options,
 		);
 		Ok(config)
 	}
@@ -372,8 +386,12 @@ impl AgentAdapter for SkillTargetAdapter {
 		false
 	}
 
-	fn validate_command(&self, _config_path: Option<&Path>) -> Command {
-		Command::new(self.target.id())
+	fn validate_command(&self, _config_path: Option<&Path>) -> Result<Command> {
+		Err(unsupported_target_resource(
+			self.target,
+			"validate",
+			"runtime",
+		))
 	}
 }
 

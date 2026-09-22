@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { agentInfo, e2eApiUrl, installMocks } from "./mocks";
+import { agentAvailability, agentInfo, e2eApiUrl, installMocks } from "./mocks";
 
 let mocks: Awaited<ReturnType<typeof installMocks>>;
 
@@ -52,14 +52,7 @@ test("offers Codex for Streamable HTTP installation", async ({ page }) => {
 	);
 	await page.route(e2eApiUrl("/agents/availability"), (route) =>
 		route.fulfill({
-			json: [
-				{
-					id: "codex",
-					has_global_directory: true,
-					has_cli: true,
-					is_available: true,
-				},
-			],
+			json: [agentAvailability("codex")],
 		}),
 	);
 	await page.reload();

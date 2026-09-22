@@ -4,6 +4,6 @@ export type AgentStatus = "ready" | "missing" | "disabled";
 
 export function agentStatus(agent: AvailableAgent): AgentStatus {
 	if (agent.isDisabled) return "disabled";
-	if (!agent.availability.is_available) return "missing";
+	if (!agent.isDetected) return "missing";
 	return "ready";
 }

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use ts_rs::TS;
 
-use crate::dto::common::ConfigSource;
+use crate::dto::common::{ConfigSource, ResourceOriginDto};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -123,6 +123,7 @@ impl From<CreateMcpRequest> for McpServer {
 			transport: req.transport.into(),
 			timeout: req.timeout,
 			config_source: None,
+			origin: None,
 		}
 	}
 }
@@ -148,6 +149,7 @@ impl UpdateMcpRequest {
 				.unwrap_or(existing.transport),
 			timeout: self.timeout.or(existing.timeout),
 			config_source: existing.config_source,
+			origin: existing.origin,
 		}
 	}
 }
@@ -164,6 +166,9 @@ pub struct McpResponse {
 	pub source: Option<ConfigSource>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub agent: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub origin: Option<ResourceOriginDto>,
 }
 
 impl From<McpServer> for McpResponse {
@@ -181,6 +186,7 @@ impl From<&McpServer> for McpResponse {
 			timeout: s.timeout,
 			source: s.config_source.map(Into::into),
 			agent: None,
+			origin: s.origin.as_ref().map(Into::into),
 		}
 	}
 }
