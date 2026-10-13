@@ -176,7 +176,7 @@ version = "1.9.1"
 dependencies = [
  "aghub-json",
  "aghub-markdown",
- "dirs 6.0.0",
+ "dirs 7.0.0",
  "libc",
  "serde",
  "serde_json",
@@ -200,7 +200,7 @@ dependencies = [
  "aghub-usage",
  "anyhow",
  "chrono",
- "dirs 6.0.0",
+ "dirs 7.0.0",
  "keyring",
  "log",
  "mcp-catalog",
@@ -229,7 +229,7 @@ dependencies = [
  "aghub-git",
  "anyhow",
  "chrono",
- "dirs 6.0.0",
+ "dirs 7.0.0",
  "flate2",
  "log",
  "reqwest",
@@ -271,7 +271,7 @@ version = "1.9.1"
 dependencies = [
  "aghub-agents",
  "aghub-git",
- "dirs 6.0.0",
+ "dirs 7.0.0",
  "log",
  "serde",
  "serde_json",
@@ -302,7 +302,7 @@ name = "aghub-inference"
 version = "1.9.1"
 dependencies = [
  "aghub-json",
- "dirs 6.0.0",
+ "dirs 7.0.0",
  "keyring",
  "reqwest",
  "serde",
@@ -354,7 +354,7 @@ version = "1.9.1"
 dependencies = [
  "base64 0.23.1",
  "chrono",
- "dirs 6.0.0",
+ "dirs 7.0.0",
  "flate2",
  "futures",
  "keyring",
@@ -2975,6 +2975,15 @@ name = "dirs"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3e8aa94d75141228480295a7d0e7feb620b1a5ad9f12bc40be62411e38cce4e"
+dependencies = [
+ "dirs-sys 0.5.0",
+]
+
+[[package]]
+name = "dirs"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d57d423b3c82e89b9a24ca3091fee61f456a26edbd28d26c65906f4bc1dcd8f"
 dependencies = [
  "dirs-sys 0.5.0",
 ]
@@ -11472,7 +11481,7 @@ version = "3.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32824fab5e16e6c4d86dc1ba84489390419a39f97699852b66480bb87d297ed8"
 dependencies = [
- "dirs 6.0.0",
+ "dirs 5.0.1",
 ]
 
 [[package]]
@@ -11539,7 +11548,7 @@ version = "1.9.1"
 dependencies = [
  "aghub-markdown",
  "chrono",
- "dirs 6.0.0",
+ "dirs 7.0.0",
  "ignore",
  "libc",
  "rustix",
