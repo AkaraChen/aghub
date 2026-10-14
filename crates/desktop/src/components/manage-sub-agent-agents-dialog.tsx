@@ -52,7 +52,7 @@ export function ManageSubAgentAgentsDialog({
 	const usableAgents = useMemo(
 		() =>
 			(availableAgents ?? []).filter(
-				(a) => a?.isUsable && supportsSubAgentScope(a, scope),
+				(a) => a?.isConfigurable && supportsSubAgentScope(a, scope),
 			),
 		[availableAgents, scope],
 	);

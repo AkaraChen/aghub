@@ -141,7 +141,7 @@ export function useMcpInstall() {
 			: undefined;
 	const mcpAgents = availableAgents.filter(
 		(agent) =>
-			agent.isUsable &&
+			agent.isConfigurable &&
 			supportsMcpScope(agent, scope) &&
 			supportsMcpTransport(agent, selectedTransport),
 	);

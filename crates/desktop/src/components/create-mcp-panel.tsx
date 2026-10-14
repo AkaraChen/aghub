@@ -59,11 +59,12 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 	const { availableAgents } = useAgentAvailability();
 
 	const usableAgents = useMemo(
-		() => availableAgents.filter((a) => a.isUsable && supportsMcp(a)),
+		() => availableAgents.filter((a) => a.isConfigurable && supportsMcp(a)),
 		[availableAgents],
 	);
 
-	const defaultAgents = usableAgents[0] ? [usableAgents[0].id] : [];
+	const detectedDefault = usableAgents.find((agent) => agent.isUsable);
+	const defaultAgents = detectedDefault ? [detectedDefault.id] : [];
 
 	const {
 		control,

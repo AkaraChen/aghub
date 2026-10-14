@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { agentInfo, e2eApiUrl, installMocks } from "./mocks";
+import { agentAvailability, agentInfo, e2eApiUrl, installMocks } from "./mocks";
 
 const importTargetAgents = [
 	agentInfo("claude", "Claude"),
@@ -9,12 +9,9 @@ const importTargetAgents = [
 	agentInfo("gemini", "Gemini CLI", true),
 ];
 
-const importTargetAvailability = importTargetAgents.map((agent) => ({
-	id: agent.id,
-	has_global_directory: true,
-	has_cli: true,
-	is_available: true,
-}));
+const importTargetAvailability = importTargetAgents.map((agent) =>
+	agentAvailability(agent.id),
+);
 
 async function scanRepository(page: Page) {
 	await page

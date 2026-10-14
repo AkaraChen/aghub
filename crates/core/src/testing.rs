@@ -32,8 +32,10 @@ impl TestConfig {
 		let temp_dir = TempDir::new().map_err(ConfigError::Io)?;
 
 		// Determine config file format based on agent type
-		let is_toml =
-			matches!(agent_type, AgentType::Codex | AgentType::Mistral);
+		let is_toml = matches!(
+			agent_type,
+			AgentType::Codex | AgentType::Grok | AgentType::Mistral
+		);
 		let is_json_list = matches!(agent_type, AgentType::OpenCode);
 
 		let config_path = if is_toml {
@@ -139,7 +141,7 @@ impl TestConfig {
 	pub fn validate_with_agent(&self) -> Result<()> {
 		let adapter = self.create_adapter();
 		let output = adapter
-			.validate_command(Some(&self.config_path))
+			.validate_command(Some(&self.config_path))?
 			.output()
 			.map_err(ConfigError::Io)?;
 		if !output.status.success() {
@@ -183,8 +185,10 @@ impl TestConfigBuilder {
 		let temp_dir = TempDir::new().map_err(ConfigError::Io)?;
 
 		// Determine config file format based on agent type
-		let is_toml =
-			matches!(self.agent_type, AgentType::Codex | AgentType::Mistral);
+		let is_toml = matches!(
+			self.agent_type,
+			AgentType::Codex | AgentType::Grok | AgentType::Mistral
+		);
 		let is_json_list = matches!(self.agent_type, AgentType::OpenCode);
 
 		let config_path = if is_toml {

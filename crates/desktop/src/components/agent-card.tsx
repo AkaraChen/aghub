@@ -12,11 +12,34 @@ interface AgentCardProps {
 
 export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 	const { t } = useTranslation();
-	const { has_global_directory, has_cli } = agent.availability;
-
-	const sources: string[] = [];
-	if (has_global_directory) sources.push(t("globalConfig"));
-	if (has_cli) sources.push(t("cli"));
+	const surfaceLabel = (kind: (typeof agent.surfaces)[number]["kind"]) => {
+		switch (kind) {
+			case "cli":
+				return t("cli");
+			case "ide":
+				return t("ide");
+			case "desktop":
+				return t("desktop");
+			case "cloud":
+				return t("cloud");
+			case "remote_workspace":
+				return t("remoteWorkspace");
+		}
+	};
+	const sources = agent.availability.surfaces
+		.filter((surface) => surface.state === "detected")
+		.map((surface) => surfaceLabel(surface.kind));
+	const uniqueSources = [...new Set(sources)];
+	const statusText =
+		agent.availability.state === "detected"
+			? t("detectedVia", { sources: uniqueSources.join(" / ") })
+			: agent.availability.configured
+				? t("configurationFoundRuntimeUnknown")
+				: agent.availability.state === "error"
+					? t("detectionFailedCanPrepare")
+					: agent.availability.state === "unknown"
+						? t("detectionUnknownCanPrepare")
+						: t("configurationCanBePrepared");
 
 	const capabilityLabels: string[] = [];
 	if (supportsSkill(agent)) capabilityLabels.push(t("skills"));
@@ -29,13 +52,7 @@ export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 					<AgentIcon id={agent.id} name={agent.display_name} />
 					<div className="min-w-0 flex-1">
 						<Card.Title>{agent.display_name}</Card.Title>
-						{sources.length > 0 && (
-							<Card.Description>
-								{t("detectedVia", {
-									sources: sources.join(" / "),
-								})}
-							</Card.Description>
-						)}
+						<Card.Description>{statusText}</Card.Description>
 					</div>
 					<Tooltip>
 						<Tooltip.Trigger>

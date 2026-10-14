@@ -116,13 +116,13 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 	const { availableAgents } = useAgentAvailability();
 
 	const usableAgents = useMemo(
-		() => availableAgents.filter((a) => a.isUsable && supportsMcp(a)),
+		() => availableAgents.filter((a) => a.isConfigurable && supportsMcp(a)),
 		[availableAgents],
 	);
-	const defaultAgentIds = useMemo(
-		() => (usableAgents[0] ? [usableAgents[0].id] : []),
-		[usableAgents],
-	);
+	const defaultAgentIds = useMemo(() => {
+		const detected = usableAgents.find((agent) => agent.isUsable);
+		return detected ? [detected.id] : [];
+	}, [usableAgents]);
 
 	const [uiState, dispatch] = useReducer(
 		importUiReducer,

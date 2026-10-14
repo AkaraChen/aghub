@@ -118,6 +118,7 @@ pub fn parse(content: &str) -> Result<AgentConfig> {
 			transport,
 			timeout,
 			config_source: None,
+			origin: None,
 		});
 	}
 
@@ -134,6 +135,7 @@ pub fn parse(content: &str) -> Result<AgentConfig> {
 			source_path: skill.source_path,
 			canonical_path: None,
 			config_source: None,
+			origin: None,
 		});
 	}
 
@@ -244,6 +246,7 @@ mod tests {
 				transport: McpTransport::stdio("echo", vec![]),
 				timeout: None,
 				config_source: None,
+				origin: None,
 			}],
 			skills: vec![Skill {
 				name: "disabled-skill".to_string(),
@@ -257,6 +260,7 @@ mod tests {
 				source_path: None,
 				canonical_path: None,
 				config_source: None,
+				origin: None,
 			}],
 			sub_agents: vec![],
 		};

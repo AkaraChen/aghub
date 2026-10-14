@@ -1,11 +1,27 @@
 use super::ConfigManager;
 use crate::{
 	errors::{ConfigError, Result},
-	models::McpServer,
+	models::{McpServer, ResourceWritePolicy},
 };
 use log::info;
 
 impl ConfigManager {
+	fn ensure_mcp_writable(&self, name: &str, operation: &str) -> Result<()> {
+		let mcp = self.get_mcp(name).ok_or_else(|| {
+			ConfigError::resource_not_found("MCP server", name)
+		})?;
+		if mcp.origin.as_ref().is_some_and(|origin| {
+			origin.write_policy != ResourceWritePolicy::ReadWrite
+		}) {
+			return Err(ConfigError::unsupported_operation(
+				operation,
+				"read-only MCP source",
+				self.adapter.name(),
+			));
+		}
+		Ok(())
+	}
+
 	pub fn add_mcp(&mut self, mut mcp: McpServer) -> Result<()> {
 		if !self.adapter.supports_mcp_operations() {
 			return Err(ConfigError::unsupported_operation(
@@ -52,6 +68,7 @@ impl ConfigManager {
 				&agent_name,
 			));
 		}
+		self.ensure_mcp_writable(name, "update")?;
 		let config = self.config_mut()?;
 		if mcp.name != name
 			&& config.mcps.iter().any(|item| item.name == mcp.name)
@@ -84,6 +101,7 @@ impl ConfigManager {
 				self.adapter.name(),
 			));
 		}
+		self.ensure_mcp_writable(name, "remove")?;
 		let agent_name = self.adapter.name().to_string();
 		let config = self.config_mut()?;
 		let index =
@@ -103,6 +121,10 @@ impl ConfigManager {
 				self.adapter.name(),
 			));
 		}
+		self.ensure_mcp_writable(
+			name,
+			if enabled { "enable" } else { "disable" },
+		)?;
 		let agent_name = self.adapter.name().to_string();
 		let config = self.config_mut()?;
 		let mcp = config.mcps.iter_mut().find(|m| m.name == name).ok_or_else(

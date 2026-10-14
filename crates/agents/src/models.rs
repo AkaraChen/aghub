@@ -54,6 +54,9 @@ pub struct Skill {
 	/// Which config scope this skill was loaded from (set at load time, not persisted)
 	#[serde(skip)]
 	pub config_source: Option<ConfigSource>,
+	/// Runtime ownership and write policy assigned during discovery.
+	#[serde(skip)]
+	pub origin: Option<ResourceOrigin>,
 }
 
 impl Skill {
@@ -70,6 +73,7 @@ impl Skill {
 			source_path: None,
 			canonical_path: None,
 			config_source: None,
+			origin: None,
 		}
 	}
 }
@@ -89,6 +93,8 @@ pub struct McpServer {
 	/// Which config scope this MCP was loaded from (set at load time, not persisted)
 	#[serde(skip)]
 	pub config_source: Option<ConfigSource>,
+	#[serde(skip)]
+	pub origin: Option<ResourceOrigin>,
 }
 
 impl McpServer {
@@ -100,6 +106,7 @@ impl McpServer {
 			transport,
 			timeout: None,
 			config_source: None,
+			origin: None,
 		}
 	}
 }
@@ -222,6 +229,8 @@ pub struct SubAgent {
 	/// Which config scope this sub-agent was loaded from (set at load time).
 	#[serde(skip)]
 	pub config_source: Option<ConfigSource>,
+	#[serde(skip)]
+	pub origin: Option<ResourceOrigin>,
 }
 
 impl SubAgent {
@@ -232,6 +241,7 @@ impl SubAgent {
 			instruction: None,
 			source_path: None,
 			config_source: None,
+			origin: None,
 		}
 	}
 }
@@ -242,6 +252,49 @@ impl SubAgent {
 pub enum ConfigSource {
 	Global,
 	Project,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResourceSourceKind {
+	Native,
+	Standard,
+	Compatible,
+	Plugin,
+	Provider,
+	System,
+	Historical,
+	External,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResourceWritePolicy {
+	ReadWrite,
+	ReadOnly,
+	ManagedExternally,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeVisibility {
+	Visible,
+	Conditional,
+	AuditOnly,
+	Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ResourceOrigin {
+	pub product_id: String,
+	pub surface_ids: Vec<String>,
+	pub scope: ConfigSource,
+	pub source_kind: ResourceSourceKind,
+	pub physical_location: Option<String>,
+	pub precedence: usize,
+	pub write_policy: ResourceWritePolicy,
+	pub runtime_visibility: RuntimeVisibility,
+	pub runtime_visibility_evidence: Option<String>,
 }
 
 /// Resource discovery scope
@@ -260,6 +313,8 @@ pub enum ResourceScope {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentType {
 	Cursor,
+	Grok,
+	DeepSeekHarness,
 	Windsurf,
 	Copilot,
 	Claude,
@@ -270,7 +325,6 @@ pub enum AgentType {
 	Antigravity,
 	Openclaw,
 	OpenCode,
-	// New agents
 	AugmentCode,
 	KiloCode,
 	Amp,
@@ -283,11 +337,37 @@ pub enum AgentType {
 	Mistral,
 	Pi,
 	JetBrainsAi,
+	Adal,
+	Aider,
+	CodeBuddy,
+	CodeWhale,
+	CommandCode,
+	Continue,
+	QwenPaw,
+	Crush,
+	DuMate,
+	Goose,
+	Hermes,
+	IFlow,
+	Junie,
+	Kode,
+	McpJam,
+	Xum,
+	Neovate,
+	OpenHands,
+	Pochi,
+	Qoder,
+	QoderWork,
+	QwenCode,
+	WorkBuddy,
+	Zencoder,
 }
 
 impl AgentType {
 	pub const ALL: &[AgentType] = &[
 		AgentType::Cursor,
+		AgentType::Grok,
+		AgentType::DeepSeekHarness,
 		AgentType::Windsurf,
 		AgentType::Copilot,
 		AgentType::Claude,
@@ -310,11 +390,37 @@ impl AgentType {
 		AgentType::Mistral,
 		AgentType::Pi,
 		AgentType::JetBrainsAi,
+		AgentType::Adal,
+		AgentType::Aider,
+		AgentType::CodeBuddy,
+		AgentType::CodeWhale,
+		AgentType::CommandCode,
+		AgentType::Continue,
+		AgentType::QwenPaw,
+		AgentType::Crush,
+		AgentType::DuMate,
+		AgentType::Goose,
+		AgentType::Hermes,
+		AgentType::IFlow,
+		AgentType::Junie,
+		AgentType::Kode,
+		AgentType::McpJam,
+		AgentType::Xum,
+		AgentType::Neovate,
+		AgentType::OpenHands,
+		AgentType::Pochi,
+		AgentType::Qoder,
+		AgentType::QoderWork,
+		AgentType::QwenCode,
+		AgentType::WorkBuddy,
+		AgentType::Zencoder,
 	];
 
 	pub fn as_str(&self) -> &'static str {
 		match self {
 			AgentType::Cursor => "cursor",
+			AgentType::Grok => "grok",
+			AgentType::DeepSeekHarness => "deepseek-harness",
 			AgentType::Windsurf => "windsurf",
 			AgentType::Copilot => "copilot",
 			AgentType::Claude => "claude",
@@ -337,6 +443,30 @@ impl AgentType {
 			AgentType::Mistral => "mistral",
 			AgentType::Pi => "pi",
 			AgentType::JetBrainsAi => "jetbrains-ai",
+			AgentType::Adal => "adal",
+			AgentType::Aider => "aider",
+			AgentType::CodeBuddy => "codebuddy",
+			AgentType::CodeWhale => "codewhale",
+			AgentType::CommandCode => "command-code",
+			AgentType::Continue => "continue",
+			AgentType::QwenPaw => "qwenpaw",
+			AgentType::Crush => "crush",
+			AgentType::DuMate => "dumate",
+			AgentType::Goose => "goose",
+			AgentType::Hermes => "hermes",
+			AgentType::IFlow => "iflow",
+			AgentType::Junie => "junie",
+			AgentType::Kode => "kode",
+			AgentType::McpJam => "mcpjam",
+			AgentType::Xum => "xum",
+			AgentType::Neovate => "neovate",
+			AgentType::OpenHands => "openhands",
+			AgentType::Pochi => "pochi",
+			AgentType::Qoder => "qoder",
+			AgentType::QoderWork => "qoderwork",
+			AgentType::QwenCode => "qwen-code",
+			AgentType::WorkBuddy => "workbuddy",
+			AgentType::Zencoder => "zencoder",
 		}
 	}
 
@@ -352,6 +482,10 @@ impl std::str::FromStr for AgentType {
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s.to_lowercase().as_str() {
 			"cursor" => Ok(AgentType::Cursor),
+			"grok" | "grok-build" => Ok(AgentType::Grok),
+			"deepseek" | "deepseek-harness" | "dsh" => {
+				Ok(AgentType::DeepSeekHarness)
+			}
 			"windsurf" => Ok(AgentType::Windsurf),
 			"copilot" => Ok(AgentType::Copilot),
 			"claude" => Ok(AgentType::Claude),
@@ -374,6 +508,30 @@ impl std::str::FromStr for AgentType {
 			"mistral" => Ok(AgentType::Mistral),
 			"pi" => Ok(AgentType::Pi),
 			"jetbrains-ai" | "jetbrains" | "jb" => Ok(AgentType::JetBrainsAi),
+			"adal" => Ok(AgentType::Adal),
+			"aider" => Ok(AgentType::Aider),
+			"codebuddy" => Ok(AgentType::CodeBuddy),
+			"codewhale" | "codew" => Ok(AgentType::CodeWhale),
+			"command-code" | "cmd" | "cmdc" => Ok(AgentType::CommandCode),
+			"continue" | "cn" => Ok(AgentType::Continue),
+			"qwenpaw" => Ok(AgentType::QwenPaw),
+			"crush" => Ok(AgentType::Crush),
+			"dumate" => Ok(AgentType::DuMate),
+			"goose" => Ok(AgentType::Goose),
+			"hermes" => Ok(AgentType::Hermes),
+			"iflow" => Ok(AgentType::IFlow),
+			"junie" => Ok(AgentType::Junie),
+			"kode" | "kwa" | "kd" => Ok(AgentType::Kode),
+			"mcpjam" => Ok(AgentType::McpJam),
+			"xum" => Ok(AgentType::Xum),
+			"neovate" => Ok(AgentType::Neovate),
+			"openhands" => Ok(AgentType::OpenHands),
+			"pochi" => Ok(AgentType::Pochi),
+			"qoder" => Ok(AgentType::Qoder),
+			"qoderwork" | "qoder-work" => Ok(AgentType::QoderWork),
+			"qwen-code" | "qwen" => Ok(AgentType::QwenCode),
+			"workbuddy" => Ok(AgentType::WorkBuddy),
+			"zencoder" | "zenflow" => Ok(AgentType::Zencoder),
 			_ => Err(format!("Unknown agent type: {s}")),
 		}
 	}
@@ -489,6 +647,7 @@ mod tests {
 			transport,
 			timeout: Some(60),
 			config_source: None,
+			origin: None,
 		};
 
 		let json = serde_json::to_string(&mcp).unwrap();
