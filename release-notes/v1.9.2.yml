@@ -1,0 +1,38 @@
+version: 1.9.2
+channel: stable
+title:
+    en: "Skills page crash fix"
+    zh-Hans: "修复技能页面闪退"
+    zh-Hant: "修正技能頁面閃退"
+announcement:
+    en: "1.9.2 is a fix release for 1.9.1. The rebuilt next version is still being designed."
+    zh-Hans: "1.9.2 是 1.9.1 的修复版本，全新重构的下一版本仍在设计中。"
+    zh-Hant: "1.9.2 是 1.9.1 的修正版本，全新重構的下一版本仍在設計中。"
+summary:
+    en: "Fix the macOS app quitting as soon as the Skills page opens, and update dependencies."
+    zh-Hans: "修复 macOS 上一打开技能页面应用就退出的问题，并更新依赖。"
+    zh-Hant: "修正 macOS 上一開啟技能頁面應用程式就結束的問題，並更新相依套件。"
+highlights:
+    - id: skill-audit-macos
+      icon: shield
+      category: fix
+      title:
+          en: "Skills page no longer quits on macOS"
+          zh-Hans: "macOS 技能页面不再闪退"
+          zh-Hant: "macOS 技能頁面不再閃退"
+      description:
+          en: "The signed macOS app now carries the system permission the Skill security scan needs, so scanning installed Skills no longer terminates the app."
+          zh-Hans: "macOS 签名版补上 Skill 安全扫描所需的系统权限，扫描已安装的 Skill 时不再导致应用被系统终止。"
+          zh-Hant: "macOS 簽署版補上 Skill 安全掃描所需的系統權限，掃描已安裝的 Skill 時不再導致應用程式被系統終止。"
+    - id: dependency-updates
+      icon: wrench
+      category: fix
+      title:
+          en: "Dependency updates"
+          zh-Hans: "依赖更新"
+          zh-Hant: "相依套件更新"
+      description:
+          en: "Update HeroUI, Tauri plugins, reqwest, serde_json, and other dependencies."
+          zh-Hans: "更新 HeroUI、Tauri 插件、reqwest、serde_json 等依赖。"
+          zh-Hant: "更新 HeroUI、Tauri 外掛、reqwest、serde_json 等相依套件。"
+knownIssues: []
