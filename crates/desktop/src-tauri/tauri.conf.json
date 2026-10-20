@@ -43,6 +43,7 @@
 			"icons/icon.ico"
 		],
 		"macOS": {
+			"entitlements": "Entitlements.plist",
 			"dmg": {
 				"background": "icons/dmg/background.tiff",
 				"windowSize": {
