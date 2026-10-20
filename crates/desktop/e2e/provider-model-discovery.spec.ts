@@ -375,6 +375,8 @@ test("fetches models anonymously when the API key is empty", async ({
 	const fetchToast = page.getByRole("alertdialog", {
 		name: "Added 1 new model(s) (1 returned)",
 	});
+	// The close button only accepts pointer events while the toast is hovered.
+	await fetchToast.hover();
 	await fetchToast.getByRole("button", { name: "Close" }).click();
 	await expect(fetchToast).toBeHidden();
 	await page.getByRole("button", { name: "Create" }).click();

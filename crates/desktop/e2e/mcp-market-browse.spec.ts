@@ -105,10 +105,12 @@ test("loads subsequent pages, keeps results on failure, and resets the search cu
 		page.getByRole("button", { name: "Retry loading more" }),
 	).toBeVisible({ timeout: 15000 });
 	await expect(page.getByText(server.name, { exact: true })).toBeVisible();
-	await page
-		.getByRole("alertdialog", {
-			name: "Couldn't load the MCP marketplace.",
-		})
+	const errorToast = page.getByRole("alertdialog", {
+		name: "Couldn't load the MCP marketplace.",
+	});
+	// The close button only accepts pointer events while the toast is hovered.
+	await errorToast.hover();
+	await errorToast
 		.getByRole("button", { name: "Close", exact: true })
 		.click();
 	failNextPage = false;
