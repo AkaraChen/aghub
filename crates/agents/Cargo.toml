@@ -16,6 +16,7 @@ thiserror = { workspace = true }
 dirs = { workspace = true }
 libc = { workspace = true }
 which = { workspace = true }
+log = { workspace = true }
 aghub-markdown = { path = "../markdown" }
 
 [dev-dependencies]

@@ -137,7 +137,7 @@ mod tests {
 				.mcp_project_path
 				.and_then(|path| path(dir))
 				.expect("Copilot should have a project MCP path"),
-			dir.join(".vscode/mcp.json")
+			dir.join(".mcp.json")
 		);
 		assert_eq!(
 			roocode

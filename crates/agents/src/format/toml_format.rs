@@ -13,9 +13,47 @@ struct TomlMcpEntry {
 	#[serde(default)]
 	args: Vec<String>,
 	env: Option<HashMap<String, String>>,
-	http_headers: Option<HashMap<String, String>>,
+	http_headers: Option<toml::Value>,
+	headers: Option<toml::Value>,
 	#[serde(default = "crate::models::default_true")]
 	enabled: bool,
+}
+
+#[derive(Clone, Copy)]
+enum TomlDialect {
+	Codex,
+	Grok,
+}
+
+impl TomlDialect {
+	fn headers_key(self) -> &'static str {
+		match self {
+			Self::Codex => "http_headers",
+			Self::Grok => "headers",
+		}
+	}
+
+	fn headers(
+		self,
+		name: &str,
+		http_headers: Option<toml::Value>,
+		headers: Option<toml::Value>,
+	) -> Result<Option<HashMap<String, String>>> {
+		let value = match self {
+			Self::Codex => http_headers,
+			Self::Grok => headers,
+		};
+		value
+			.map(|value| {
+				value.try_into().map_err(|error| {
+					ConfigError::InvalidConfig(format!(
+						"MCP '{name}' field '{}' is invalid: {error}",
+						self.headers_key()
+					))
+				})
+			})
+			.transpose()
+	}
 }
 
 fn parse_toml(content: &str) -> Result<toml::Value> {
@@ -24,7 +62,7 @@ fn parse_toml(content: &str) -> Result<toml::Value> {
 	})
 }
 
-pub fn parse(content: &str) -> Result<AgentConfig> {
+fn parse_dialect(content: &str, dialect: TomlDialect) -> Result<AgentConfig> {
 	let doc = parse_toml(content)?;
 	let mut config = AgentConfig::new();
 	let Some(value) = doc.get("mcp_servers") else {
@@ -40,6 +78,7 @@ pub fn parse(content: &str) -> Result<AgentConfig> {
 		let mcp: TomlMcpEntry = entry.clone().try_into().map_err(|error| {
 			ConfigError::InvalidConfig(format!("MCP '{name}': {error}"))
 		})?;
+		let headers = dialect.headers(name, mcp.http_headers, mcp.headers)?;
 		let transport = match (mcp.command, mcp.url) {
 			(Some(command), None) => McpTransport::Stdio {
 				command,
@@ -49,7 +88,7 @@ pub fn parse(content: &str) -> Result<AgentConfig> {
 			},
 			(None, Some(url)) => McpTransport::StreamableHttp {
 				url,
-				headers: mcp.http_headers,
+				headers,
 				timeout: None,
 			},
 			_ => {
@@ -66,12 +105,35 @@ pub fn parse(content: &str) -> Result<AgentConfig> {
 	Ok(config)
 }
 
+pub fn parse(content: &str) -> Result<AgentConfig> {
+	parse_dialect(content, TomlDialect::Codex)
+}
+
+pub fn parse_grok(content: &str) -> Result<AgentConfig> {
+	parse_dialect(content, TomlDialect::Grok)
+}
+
 pub fn serialize(
 	config: &AgentConfig,
 	original: Option<&str>,
 ) -> Result<String> {
+	serialize_dialect(config, original, TomlDialect::Codex)
+}
+
+pub fn serialize_grok(
+	config: &AgentConfig,
+	original: Option<&str>,
+) -> Result<String> {
+	serialize_dialect(config, original, TomlDialect::Grok)
+}
+
+fn serialize_dialect(
+	config: &AgentConfig,
+	original: Option<&str>,
+	dialect: TomlDialect,
+) -> Result<String> {
 	let content = original.unwrap_or("");
-	let previous = parse(content)?;
+	let previous = parse_dialect(content, dialect)?;
 	let mut doc = content.parse::<DocumentMut>().map_err(|error| {
 		ConfigError::InvalidConfig(format!("Failed to parse TOML: {error}"))
 	})?;
@@ -113,7 +175,7 @@ pub fn serialize(
 				McpTransport::Stdio {
 					command, args, env, ..
 				} => {
-					for key in ["url", "http_headers"] {
+					for key in ["url", dialect.headers_key()] {
 						entry.remove(key);
 					}
 					entry.insert("command", value(command));
@@ -134,7 +196,16 @@ pub fn serialize(
 						entry.remove("env");
 					}
 				}
-				McpTransport::StreamableHttp { url, headers, .. } => {
+				McpTransport::Sse { url, headers, .. }
+				| McpTransport::StreamableHttp { url, headers, .. } => {
+					if matches!(mcp.transport, McpTransport::Sse { .. })
+						&& matches!(dialect, TomlDialect::Codex)
+					{
+						return Err(ConfigError::UnsupportedOperation(
+							"TOML MCP configuration does not support legacy SSE"
+								.into(),
+						));
+					}
 					for key in ["command", "args", "env"] {
 						entry.remove(key);
 					}
@@ -144,16 +215,10 @@ pub fn serialize(
 						for (key, val) in headers {
 							table.insert(key, value(val));
 						}
-						entry.insert("http_headers", Item::Table(table));
+						entry.insert(dialect.headers_key(), Item::Table(table));
 					} else {
-						entry.remove("http_headers");
+						entry.remove(dialect.headers_key());
 					}
-				}
-				McpTransport::Sse { .. } => {
-					return Err(ConfigError::UnsupportedOperation(
-						"TOML MCP configuration does not support legacy SSE"
-							.into(),
-					))
 				}
 			}
 		}
@@ -395,6 +460,119 @@ command = "old-command"
 		assert_eq!(
 			after["mcp_servers"]["replacement"]["command"].as_str(),
 			Some("new-command")
+		);
+	}
+
+	#[test]
+	fn grok_http_edit_uses_headers_and_preserves_native_fields() {
+		let original = r#"
+[models]
+default = "grok-build"
+
+[mcp_servers.linear]
+url = "https://mcp.example.test/mcp"
+headers = { Authorization = "Bearer ${LINEAR_API_KEY}" }
+enabled = false
+startup_timeout_sec = 45
+tool_timeout_sec = 120
+tool_timeouts = { search = 15 }
+bearer_token_env_var = "LINEAR_API_KEY"
+
+[mcp_servers.linear.oauth]
+client_id = "example-client"
+"#;
+		let mut config = parse_grok(original).unwrap();
+		assert_eq!(config.mcps.len(), 1);
+		assert!(!config.mcps[0].enabled);
+		assert!(matches!(
+			&config.mcps[0].transport,
+			McpTransport::StreamableHttp { headers: Some(headers), .. }
+				if headers["Authorization"]
+					== "Bearer ${LINEAR_API_KEY}"
+		));
+		config.mcps[0].enabled = true;
+		config.mcps[0].transport = McpTransport::streamable_http_with_headers(
+			"https://mcp.example.test/updated",
+			HashMap::from([("X-Tenant".into(), "acme".into())]),
+		);
+
+		let output = serialize_grok(&config, Some(original)).unwrap();
+		let before = parse_toml(original).unwrap();
+		let after = parse_toml(&output).unwrap();
+		let entry = &after["mcp_servers"]["linear"];
+		assert_eq!(entry["enabled"].as_bool(), Some(true));
+		assert_eq!(
+			entry["url"].as_str(),
+			Some("https://mcp.example.test/updated")
+		);
+		assert_eq!(entry["headers"]["X-Tenant"].as_str(), Some("acme"));
+		assert!(entry.get("http_headers").is_none());
+		for key in [
+			"startup_timeout_sec",
+			"tool_timeout_sec",
+			"tool_timeouts",
+			"bearer_token_env_var",
+			"oauth",
+		] {
+			assert_eq!(entry[key], before["mcp_servers"]["linear"][key]);
+		}
+		assert_eq!(after["models"], before["models"]);
+	}
+
+	#[test]
+	fn grok_new_http_server_serializes_native_headers() {
+		let config = AgentConfig {
+			mcps: vec![McpServer::new(
+				"remote",
+				McpTransport::streamable_http_with_headers(
+					"https://mcp.example.test/mcp",
+					HashMap::from([("X-API-Key".into(), "${API_KEY}".into())]),
+				),
+			)],
+			..AgentConfig::new()
+		};
+
+		let output = serialize_grok(&config, None).unwrap();
+		let parsed = parse_toml(&output).unwrap();
+		let entry = &parsed["mcp_servers"]["remote"];
+		assert_eq!(entry["headers"]["X-API-Key"].as_str(), Some("${API_KEY}"));
+		assert!(entry.get("http_headers").is_none());
+	}
+
+	#[test]
+	fn codex_preserves_unowned_grok_headers() {
+		let original = r#"
+[mcp_servers.local]
+command = "old-command"
+headers = "owned-by-another-dialect"
+"#;
+		let mut config = parse(original).unwrap();
+		config.mcps[0].transport = McpTransport::stdio("new-command", vec![]);
+
+		let output = serialize(&config, Some(original)).unwrap();
+		let parsed = parse_toml(&output).unwrap();
+		let entry = &parsed["mcp_servers"]["local"];
+		assert_eq!(entry["command"].as_str(), Some("new-command"));
+		assert_eq!(entry["headers"].as_str(), Some("owned-by-another-dialect"));
+	}
+
+	#[test]
+	fn grok_preserves_unowned_codex_headers() {
+		let original = r#"
+[mcp_servers.local]
+command = "old-command"
+http_headers = "owned-by-another-dialect"
+"#;
+		let mut config = parse_grok(original).unwrap();
+		config.mcps[0].transport = McpTransport::stdio("new-command", vec![]);
+
+		let output = serialize_grok(&config, Some(original)).unwrap();
+		let parsed = parse_toml(&output).unwrap();
+		let entry = &parsed["mcp_servers"]["local"];
+		assert_eq!(entry["command"].as_str(), Some("new-command"));
+		assert_eq!(
+			entry["http_headers"].as_str(),
+			Some("owned-by-another-dialect")
 		);
 	}
 }

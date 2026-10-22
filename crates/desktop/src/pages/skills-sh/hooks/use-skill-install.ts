@@ -55,7 +55,7 @@ export function useSkillInstall() {
 
 	const skillAgents = availableAgents.filter(
 		(a) =>
-			a.isUsable &&
+			a.isConfigurable &&
 			supportsIndividualSkillTarget(
 				a,
 				installToProject ? "project" : "global",

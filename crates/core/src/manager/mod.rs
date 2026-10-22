@@ -2,7 +2,8 @@ use crate::{
 	adapters::AgentAdapter,
 	errors::{ConfigError, Result},
 	models::{
-		AgentConfig, ConfigSource, McpServer, ResourceScope, Skill, SubAgent,
+		AgentConfig, ConfigSource, McpServer, ResourceScope,
+		ResourceWritePolicy, Skill, SubAgent,
 	},
 };
 use log::{debug, info, warn};
@@ -93,11 +94,9 @@ impl ConfigManager {
 		Ok(self.config.as_ref().unwrap())
 	}
 
-	/// Load and merge configs from both project and global, tracking
-	/// provenance.
-	/// Skills are deduplicated by name (project takes precedence).
-	/// Sub-agents are deduplicated by name (project takes precedence).
-	/// MCPs are not deduplicated — same name can appear from both scopes.
+	/// Load both scopes using the precedence declared for each resource.
+	/// Skills and sub-agents keep the first same-name entry. MCPs retain both
+	/// scopes so callers can edit each source.
 	pub fn load_both_annotated(
 		&mut self,
 	) -> Result<(Vec<Skill>, Vec<McpServer>, Vec<SubAgent>)> {
@@ -111,63 +110,62 @@ impl ConfigManager {
 		let mut seen_skills = std::collections::HashSet::new();
 		let mut seen_sub_agents = std::collections::HashSet::new();
 
-		// Project first (takes precedence)
-		if let Some(root) = self.project_root.clone() {
-			if self
-				.adapter
-				.supports_skill_scope(ResourceScope::ProjectOnly)
-				|| self.adapter.supports_mcp_scope(ResourceScope::ProjectOnly)
-				|| self
-					.adapter
-					.supports_sub_agent_scope(ResourceScope::ProjectOnly)
-			{
-				if let Ok(project) = self
-					.adapter
-					.load_config(Some(&root), ResourceScope::ProjectOnly)
-				{
-					for mut skill in project.skills {
-						seen_skills.insert(skill.name.clone());
-						skill.config_source = Some(ConfigSource::Project);
-						skills.push(skill);
-					}
-					for mut mcp in project.mcps {
-						mcp.config_source = Some(ConfigSource::Project);
-						mcps.push(mcp);
-					}
-					for mut agent in project.sub_agents {
-						seen_sub_agents.insert(agent.name.clone());
-						agent.config_source = Some(ConfigSource::Project);
-						sub_agents.push(agent);
-					}
+		let supports_scope = |scope| {
+			self.adapter.supports_skill_scope(scope)
+				|| self.adapter.supports_mcp_scope(scope)
+				|| self.adapter.supports_sub_agent_scope(scope)
+		};
+		let global = if supports_scope(ResourceScope::GlobalOnly) {
+			Some(self.adapter.load_config(None, ResourceScope::GlobalOnly)?)
+		} else {
+			None
+		};
+		let project = if supports_scope(ResourceScope::ProjectOnly) {
+			match self.project_root.as_deref() {
+				Some(root) => Some(
+					self.adapter
+						.load_config(Some(root), ResourceScope::ProjectOnly)?,
+				),
+				None => None,
+			}
+		} else {
+			None
+		};
+		let ordered = |precedence| {
+			let global =
+				global.as_ref().map(|config| (config, ConfigSource::Global));
+			let project = project
+				.as_ref()
+				.map(|config| (config, ConfigSource::Project));
+			match precedence {
+				crate::ScopePrecedence::ProjectThenGlobal => [project, global],
+				crate::ScopePrecedence::GlobalThenProject => [global, project],
+			}
+		};
+		let precedence = self.adapter.resource_precedence();
+
+		for (loaded, source) in ordered(precedence.skills).into_iter().flatten()
+		{
+			for mut skill in loaded.skills.iter().cloned() {
+				if seen_skills.insert(skill.name.clone()) {
+					skill.config_source = Some(source);
+					skills.push(skill);
 				}
 			}
 		}
-
-		// Global second
-		if self.adapter.supports_skill_scope(ResourceScope::GlobalOnly)
-			|| self.adapter.supports_mcp_scope(ResourceScope::GlobalOnly)
-			|| self
-				.adapter
-				.supports_sub_agent_scope(ResourceScope::GlobalOnly)
+		for (loaded, source) in ordered(precedence.mcp).into_iter().flatten() {
+			for mut mcp in loaded.mcps.iter().cloned() {
+				mcp.config_source = Some(source);
+				mcps.push(mcp);
+			}
+		}
+		for (loaded, source) in
+			ordered(precedence.sub_agents).into_iter().flatten()
 		{
-			if let Ok(global) =
-				self.adapter.load_config(None, ResourceScope::GlobalOnly)
-			{
-				for mut skill in global.skills {
-					if !seen_skills.contains(&skill.name) {
-						skill.config_source = Some(ConfigSource::Global);
-						skills.push(skill);
-					}
-				}
-				for mut mcp in global.mcps {
-					mcp.config_source = Some(ConfigSource::Global);
-					mcps.push(mcp);
-				}
-				for mut agent in global.sub_agents {
-					if !seen_sub_agents.contains(&agent.name) {
-						agent.config_source = Some(ConfigSource::Global);
-						sub_agents.push(agent);
-					}
+			for mut agent in loaded.sub_agents.iter().cloned() {
+				if seen_sub_agents.insert(agent.name.clone()) {
+					agent.config_source = Some(source);
+					sub_agents.push(agent);
 				}
 			}
 		}
@@ -189,62 +187,12 @@ impl ConfigManager {
 			"loading merged config for agent '{}' across scopes",
 			self.adapter.name()
 		);
-		let mut merged_config = AgentConfig::new();
-		let mut seen_skill_names = std::collections::HashSet::new();
-		let mut seen_sub_agent_names = std::collections::HashSet::new();
-
-		// Load project config first (project entries take precedence)
-		if let Some(root) = &self.project_root {
-			if self
-				.adapter
-				.supports_skill_scope(ResourceScope::ProjectOnly)
-				|| self.adapter.supports_mcp_scope(ResourceScope::ProjectOnly)
-				|| self
-					.adapter
-					.supports_sub_agent_scope(ResourceScope::ProjectOnly)
-			{
-				let project = self
-					.adapter
-					.load_config(Some(root), ResourceScope::ProjectOnly)?;
-				for skill in project.skills {
-					if !seen_skill_names.contains(&skill.name) {
-						seen_skill_names.insert(skill.name.clone());
-						merged_config.skills.push(skill);
-					}
-				}
-				merged_config.mcps.extend(project.mcps);
-				for agent in project.sub_agents {
-					if !seen_sub_agent_names.contains(&agent.name) {
-						seen_sub_agent_names.insert(agent.name.clone());
-						merged_config.sub_agents.push(agent);
-					}
-				}
-			}
-		}
-
-		// Load global config
-		if self.adapter.supports_skill_scope(ResourceScope::GlobalOnly)
-			|| self.adapter.supports_mcp_scope(ResourceScope::GlobalOnly)
-			|| self
-				.adapter
-				.supports_sub_agent_scope(ResourceScope::GlobalOnly)
-		{
-			let global =
-				self.adapter.load_config(None, ResourceScope::GlobalOnly)?;
-			for skill in global.skills {
-				if !seen_skill_names.contains(&skill.name) {
-					seen_skill_names.insert(skill.name.clone());
-					merged_config.skills.push(skill);
-				}
-			}
-			merged_config.mcps.extend(global.mcps);
-			for agent in global.sub_agents {
-				if !seen_sub_agent_names.contains(&agent.name) {
-					seen_sub_agent_names.insert(agent.name.clone());
-					merged_config.sub_agents.push(agent);
-				}
-			}
-		}
+		let (skills, mcps, sub_agents) = self.load_both_annotated()?;
+		let merged_config = AgentConfig {
+			skills,
+			mcps,
+			sub_agents,
+		};
 
 		self.config = Some(merged_config);
 		if let Some(config) = self.config.as_ref() {
@@ -280,14 +228,24 @@ impl ConfigManager {
 				self.adapter.name(),
 			));
 		}
+		let writable_mcps = config
+			.mcps
+			.iter()
+			.filter(|mcp| {
+				mcp.origin.as_ref().is_none_or(|origin| {
+					origin.write_policy == ResourceWritePolicy::ReadWrite
+				})
+			})
+			.cloned()
+			.collect::<Vec<_>>();
 		self.adapter.save_mcps(
 			self.project_root.as_deref(),
 			self.write_scope,
-			&config.mcps,
+			&writable_mcps,
 		)?;
 		info!(
 			"saved {} MCPs for agent '{}' in scope {:?}",
-			config.mcps.len(),
+			writable_mcps.len(),
 			self.adapter.name(),
 			self.write_scope
 		);
@@ -331,7 +289,7 @@ impl ConfigManager {
 		);
 		let output = self
 			.adapter
-			.validate_command(config_path.as_deref())
+			.validate_command(config_path.as_deref())?
 			.output()?;
 		if !output.status.success() {
 			let stderr = String::from_utf8_lossy(&output.stderr);
@@ -364,5 +322,152 @@ impl ConfigManager {
 		self.config.as_mut().ok_or_else(|| {
 			ConfigError::InvalidConfig("No configuration loaded".to_string())
 		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::{McpTransport, ResourcePrecedence, ScopePrecedence};
+	use std::process::Command;
+
+	struct MixedPrecedenceAdapter;
+
+	impl AgentAdapter for MixedPrecedenceAdapter {
+		fn name(&self) -> &'static str {
+			"mixed-precedence"
+		}
+
+		fn supports_skill_scope(&self, _scope: ResourceScope) -> bool {
+			true
+		}
+
+		fn supports_mcp_scope(&self, _scope: ResourceScope) -> bool {
+			true
+		}
+
+		fn supports_sub_agent_scope(&self, _scope: ResourceScope) -> bool {
+			true
+		}
+
+		fn resource_precedence(&self) -> ResourcePrecedence {
+			ResourcePrecedence {
+				skills: ScopePrecedence::GlobalThenProject,
+				mcp: ScopePrecedence::ProjectThenGlobal,
+				sub_agents: ScopePrecedence::ProjectThenGlobal,
+				rules: ScopePrecedence::GlobalThenProject,
+			}
+		}
+
+		fn mcp_config_path(
+			&self,
+			_project_root: Option<&Path>,
+			_scope: ResourceScope,
+		) -> Option<PathBuf> {
+			None
+		}
+
+		fn load_mcps(
+			&self,
+			_project_root: Option<&Path>,
+			scope: ResourceScope,
+		) -> Result<Vec<McpServer>> {
+			Ok(vec![McpServer::new(
+				"shared",
+				McpTransport::stdio(format!("{scope:?}"), Vec::new()),
+			)])
+		}
+
+		fn save_mcps(
+			&self,
+			_project_root: Option<&Path>,
+			_scope: ResourceScope,
+			_mcps: &[McpServer],
+		) -> Result<()> {
+			Ok(())
+		}
+
+		fn load_sub_agents(
+			&self,
+			_project_root: Option<&Path>,
+			scope: ResourceScope,
+		) -> Result<Vec<SubAgent>> {
+			let mut agent = SubAgent::new("shared");
+			agent.description = Some(format!("{scope:?}"));
+			Ok(vec![agent])
+		}
+
+		fn save_sub_agents(
+			&self,
+			_project_root: Option<&Path>,
+			_scope: ResourceScope,
+			_agents: &[SubAgent],
+		) -> Result<()> {
+			Ok(())
+		}
+
+		fn load_config(
+			&self,
+			project_root: Option<&Path>,
+			scope: ResourceScope,
+		) -> Result<AgentConfig> {
+			let mut skill = Skill::new("shared");
+			skill.description = Some(format!("{scope:?}"));
+			Ok(AgentConfig {
+				skills: vec![skill],
+				mcps: self.load_mcps(project_root, scope)?,
+				sub_agents: self.load_sub_agents(project_root, scope)?,
+			})
+		}
+
+		fn get_skills_paths(
+			&self,
+			_project_root: Option<&Path>,
+			_scope: ResourceScope,
+		) -> Vec<PathBuf> {
+			Vec::new()
+		}
+
+		fn target_skills_dir(
+			&self,
+			_project_root: Option<&Path>,
+			_scope: ResourceScope,
+		) -> Option<PathBuf> {
+			None
+		}
+
+		fn mcp_supports_transport(&self, _transport: &McpTransport) -> bool {
+			true
+		}
+
+		fn validate_command(
+			&self,
+			_config_path: Option<&Path>,
+		) -> Result<Command> {
+			Ok(Command::new("true"))
+		}
+	}
+
+	#[test]
+	fn both_scope_uses_each_resources_precedence() {
+		let project = tempfile::tempdir().unwrap();
+		let mut manager = ConfigManager::with_scope(
+			Box::new(MixedPrecedenceAdapter),
+			false,
+			Some(project.path()),
+			ResourceScope::Both,
+		);
+
+		let (skills, mcps, sub_agents) = manager.load_both_annotated().unwrap();
+
+		assert_eq!(skills.len(), 1);
+		assert_eq!(skills[0].config_source, Some(ConfigSource::Global));
+		assert_eq!(skills[0].description.as_deref(), Some("GlobalOnly"));
+		assert_eq!(mcps.len(), 2);
+		assert_eq!(mcps[0].config_source, Some(ConfigSource::Project));
+		assert_eq!(mcps[1].config_source, Some(ConfigSource::Global));
+		assert_eq!(sub_agents.len(), 1);
+		assert_eq!(sub_agents[0].config_source, Some(ConfigSource::Project));
+		assert_eq!(sub_agents[0].description.as_deref(), Some("ProjectOnly"));
 	}
 }

@@ -34,13 +34,14 @@ fn save_mcps(
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "jetbrains-ai",
 	display_name: "JetBrains AI",
+	surfaces: &[AgentSurface::ide("ide", &[], &[global_data_dir])],
+	precedence: ResourcePrecedence::uniform(ScopePrecedence::ProjectThenGlobal),
 	mcp_parse_config: None,
 	mcp_serialize_config: None,
 	load_mcps,
 	save_mcps,
 	mcp_global_path: None,
 	mcp_project_path: None,
-	global_data_dir,
 	capabilities: Capabilities {
 		skills: SkillCapabilities {
 			scopes: ScopeSupport {
@@ -48,6 +49,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				project: false,
 			},
 			universal: false,
+			discovery: SkillDiscovery::STANDARD,
+			universal_global_path: None,
 		},
 		mcp: McpCapabilities {
 			scopes: ScopeSupport {
@@ -68,10 +71,10 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	global_skill_paths: None,
 	project_skill_paths: None,
+	global_sub_agent_paths: None,
+	project_sub_agent_paths: None,
 	load_sub_agents: load_sub_agents_noop,
 	save_sub_agents: save_sub_agents_noop,
-	cli_name: "jetbrains",
-	validate_args: &["--version"],
 	project_markers: &[],
 	skills_cli_name: None,
 	rule_paths: None,

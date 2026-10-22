@@ -88,6 +88,8 @@
 		switch (cmd) {
 			case "start_server":
 				return Promise.resolve({ port: apiPort, token: "e2e-token" });
+			case "agent_config_dir":
+				return Promise.resolve(`/tmp/e2e/config/${args.agentId}`);
 			case "plugin:app|name":
 				return Promise.resolve("aghub");
 			case "plugin:app|version":

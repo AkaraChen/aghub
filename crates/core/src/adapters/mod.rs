@@ -1,6 +1,7 @@
 use crate::{
 	errors::Result,
 	models::{AgentConfig, McpServer, McpTransport, ResourceScope, SubAgent},
+	ResourcePrecedence,
 };
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -11,6 +12,7 @@ pub trait AgentAdapter: Send + Sync {
 	fn supports_skill_scope(&self, scope: ResourceScope) -> bool;
 	fn supports_mcp_scope(&self, scope: ResourceScope) -> bool;
 	fn supports_sub_agent_scope(&self, scope: ResourceScope) -> bool;
+	fn resource_precedence(&self) -> ResourcePrecedence;
 	fn mcp_config_path(
 		&self,
 		project_root: Option<&Path>,
@@ -66,7 +68,7 @@ pub trait AgentAdapter: Send + Sync {
 		true
 	}
 	fn mcp_supports_transport(&self, transport: &McpTransport) -> bool;
-	fn validate_command(&self, config_path: Option<&Path>) -> Command;
+	fn validate_command(&self, config_path: Option<&Path>) -> Result<Command>;
 	fn supports_mcp_enable_disable(&self) -> bool {
 		true
 	}
