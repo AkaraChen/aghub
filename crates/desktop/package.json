@@ -71,7 +71,7 @@
 		"react-grab": "^0.1.32",
 		"react-hook-form": "^7.86.0",
 		"react-i18next": "^17.0.14",
-		"react-virtuoso": "^4.18.7",
+		"react-virtuoso": "^4.18.19",
 		"rooks": "^9.8.0",
 		"simple-icons": "^16.28.0",
 		"stable-hash": "^0.0.6",

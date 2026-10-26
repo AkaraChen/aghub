@@ -47,7 +47,7 @@
         "react-grab": "^0.1.32",
         "react-hook-form": "^7.86.0",
         "react-i18next": "^17.0.14",
-        "react-virtuoso": "^4.18.7",
+        "react-virtuoso": "^4.18.19",
         "rooks": "^9.8.0",
         "simple-icons": "^16.28.0",
         "stable-hash": "^0.0.6",
@@ -1233,7 +1233,7 @@
 
     "react-transition-group": ["react-transition-group@4.4.5", "", { "dependencies": { "@babel/runtime": "^7.5.5", "dom-helpers": "^5.0.1", "loose-envify": "^1.4.0", "prop-types": "^15.6.2" }, "peerDependencies": { "react": ">=16.6.0", "react-dom": ">=16.6.0" } }, "sha512-pZcd1MCJoiKiBR2NRxeCRg13uCXbydPnmB4EOeRrY7480qNWO8IIgQG6zlDkm6uRMsURXPuKq0GWtiM59a5Q6g=="],
 
-    "react-virtuoso": ["react-virtuoso@4.18.10", "", { "peerDependencies": { "react": ">=16 || >=17 || >= 18 || >= 19", "react-dom": ">=16 || >=17 || >= 18 || >=19" } }, "sha512-P6GIZ7kWAPOYB2H16yRQNgy+VF9pJOuTFw1EUc1EAtCj5WxVSAF1Sql3x3fbLwaLeBFsiPnu+3U9o6sIOyTdFw=="],
+    "react-virtuoso": ["react-virtuoso@4.18.19", "", { "peerDependencies": { "react": ">=16 || >=17 || >= 18 || >= 19", "react-dom": ">=16 || >=17 || >= 18 || >=19" } }, "sha512-dewyZisA5IiQTldh7eHM5KpI+qxi0nKRVYi2iM01XmPkNa5tjvVUKJKAIc6ted1hAK1/NFlXuhXpVYqGHHdcdQ=="],
 
     "refa": ["refa@0.12.1", "", { "dependencies": { "@eslint-community/regexpp": "^4.8.0" } }, "sha512-J8rn6v4DBb2nnFqkqwy6/NnTYMcgLA+sLr0iIO41qpv0n+ngb7ksag2tMRl0inb1bbO/esUwzW1vbJi7K0sI0g=="],
 
