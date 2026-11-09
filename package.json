@@ -13,7 +13,7 @@
 		"husky": "^9.1.7",
 		"nano-staged": "^1.0.0",
 		"prettier": "3.9.10",
-		"semver": "^7.8.5"
+		"semver": "^7.8.6"
 	},
 	"peerDependencies": {
 		"typescript": "^7.0.0"
